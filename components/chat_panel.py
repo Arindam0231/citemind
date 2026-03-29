@@ -2,6 +2,7 @@
 CiteMind — AI chat panel component.
 Message scroll, context pills, suggestion chips, and input.
 """
+
 from __future__ import annotations
 
 from typing import List, Optional
@@ -46,20 +47,21 @@ def build_chat_panel() -> html.Div:
                 id="chat-messages",
                 className="chat-scroll",
             ),
+            # TODO last priority
             # Quick chips
-            html.Div(
-                [
-                    html.Button(
-                        chip,
-                        id={"type": "quick-chip", "index": i},
-                        className="quick-chip",
-                        n_clicks=0,
-                    )
-                    for i, chip in enumerate(QUICK_CHIPS)
-                ],
-                className="quick-chips",
-                id="quick-chips-bar",
-            ),
+            # html.Div(
+            #     [
+            #         html.Button(
+            #             chip,
+            #             id={"type": "quick-chip", "index": i},
+            #             className="quick-chip",
+            #             n_clicks=0,
+            #         )
+            #         for i, chip in enumerate(QUICK_CHIPS)
+            #     ],
+            #     className="quick-chips",
+            #     id="quick-chips-bar",
+            # ),
             # Input row
             html.Div(
                 [

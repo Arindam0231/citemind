@@ -4,7 +4,9 @@ CiteMind — Dash application entry point.
 """
 
 from __future__ import annotations
+from dotenv import load_dotenv
 
+load_dotenv()  # Load environment variables from .env file
 import os
 import sys
 
@@ -167,14 +169,14 @@ app.layout = build_layout()
 # ── Register callbacks ──────────────────────────────────
 from callbacks.slide_callbacks import register_slide_callbacks
 
-# from callbacks.citation_callbacks import register_citation_callbacks
-# from callbacks.chat_callbacks import register_chat_callbacks
-# from callbacks.selection_callbacks import register_selection_callbacks
+from callbacks.citation_callbacks import register_citation_callbacks
+from callbacks.chat_callbacks import register_chat_callbacks
+from callbacks.selection_callbacks import register_selection_callbacks
 
 register_slide_callbacks(app)
-# register_citation_callbacks(app)
-# register_chat_callbacks(app)
-# register_selection_callbacks(app)
+register_citation_callbacks(app)
+register_chat_callbacks(app)
+register_selection_callbacks(app)
 
 
 server = app.server

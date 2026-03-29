@@ -2,9 +2,12 @@
 CiteMind Agent — LangGraph node functions.
 Each node receives the full CitationState and returns a partial update dict.
 """
+
 import os
-from anthropic import Anthropic
-from .prompts import (
+import json
+from langchain_core.messages import SystemMessage, HumanMessage
+from agent.llm_utils import llm_service
+from agent.prompts import (
     SYSTEM_PROMPT,
     ROUTING_PROMPT,
     SUGGEST_PROMPT,
@@ -16,26 +19,16 @@ from utils.pptx_parser import format_slides_for_prompt
 from utils.xlsx_parser import format_sheets_for_prompt
 
 # ── LLM client ─────────────────────────────────────────
-_client = None
-
-
-def _get_client() -> Anthropic:
-    global _client
-    if _client is None:
-        _client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
-    return _client
 
 
 def _call_claude(system: str, user_message: str, max_tokens: int = 2048) -> str:
-    """Low-level Claude API call."""
-    client = _get_client()
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=max_tokens,
-        system=system,
-        messages=[{"role": "user", "content": user_message}],
-    )
-    return response.content[0].text
+    """Low-level API call using the integrated llm_service."""
+    messages = [SystemMessage(content=system), HumanMessage(content=user_message)]
+    result = llm_service(messages)
+
+    if isinstance(result, dict):
+        return json.dumps(result)
+    return str(result)
 
 
 def _build_system_prompt(state: dict) -> str:

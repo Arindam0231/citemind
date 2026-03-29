@@ -270,25 +270,25 @@ def register_slide_callbacks(app):
 
         # Get shapes & citations
         shapes = get_shapes_for_slide(slide_id)
-        # citations = get_citations_for_slide(project_id, slide_id)
+        citations = get_citations_for_slide(project_id, slide_id)
 
         # # Build overlays
         overlays = []
-        # for s in shapes:
-        #     overlay = build_shape_overlay(s)
+        for s in shapes:
+            overlay = build_shape_overlay(s)
 
-        #     # Apply citation status colors
-        #     shape_cits = [c for c in citations if c["shape_id"] == s["id"]]
-        #     if shape_cits:
-        #         status_set = {c["status"] for c in shape_cits}
-        #         if "pending" in status_set:
-        #             overlay.className += " has-pending"
-        #         elif "rejected" in status_set:
-        #             overlay.className += " has-rejected"
-        #         else:
-        #             overlay.className += " has-confirmed"
+            # Apply citation status colors
+            shape_cits = [c for c in citations if c["shape_id"] == s["id"]]
+            if shape_cits:
+                status_set = {c["status"] for c in shape_cits}
+                if "pending" in status_set:
+                    overlay.className += " has-pending"
+                elif "rejected" in status_set:
+                    overlay.className += " has-rejected"
+                else:
+                    overlay.className += " has-confirmed"
 
-        #     overlays.append(overlay)
+            overlays.append(overlay)
 
         return (
             prev_disabled,
