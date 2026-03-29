@@ -2,16 +2,15 @@ import json
 import hashlib
 import logging
 from typing import List, Dict, Any, Optional
-
-from dotenv import load_dotenv
+import os
 from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, SystemMessage
 from langchain_anthropic import ChatAnthropic
 
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 cache: Dict[str, Any] = {}
+
 
 def is_safe_code(code: str) -> bool:
     """Basic safety check for generated code."""
@@ -21,7 +20,14 @@ def is_safe_code(code: str) -> bool:
             return False
     return True
 
-def llm_service(messages: List[BaseMessage], use_cache: bool = True) -> dict | str:
+
+def llm_service(messages: List[BaseMessage], use_cache: bool = False) -> dict | str:
+    print(
+        "ANTHROPIC_API_KEY:", os.getenv("ANTHROPIC_API_KEY")
+    )  # Debug: check if key is loaded
+    print("LLM Service called with messages:")
+    for msg in messages:
+        print(f"  {msg.type}: {msg.content}")
     llm = ChatAnthropic(model="claude-sonnet-4-20250514", temperature=0)
 
     logger.debug(
@@ -41,7 +47,7 @@ def llm_service(messages: List[BaseMessage], use_cache: bool = True) -> dict | s
         cache_key = hashlib.md5(
             json.dumps(
                 [{"role": m.type, "content": str(m.content)} for m in messages],
-                sort_keys=True
+                sort_keys=True,
             ).encode()
         ).hexdigest()
 
@@ -81,6 +87,7 @@ def llm_service(messages: List[BaseMessage], use_cache: bool = True) -> dict | s
             exc_info=True,
         )
         raise
+
 
 def llm_exec_with_retry(
     fn_name: str,

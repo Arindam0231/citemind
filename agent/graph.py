@@ -1,6 +1,7 @@
 """
 CiteMind Agent — LangGraph StateGraph definition.
 """
+
 from typing import TypedDict, List, Annotated
 import operator
 
@@ -20,8 +21,8 @@ from .nodes import (
 
 class CitationState(TypedDict):
     # Document context (loaded once, passed through)
-    slides: List[dict]          # [{"slide": 1, "text": "..."}]
-    sheets: dict                # {"Sheet1": [["hdr",...], ["row",...], ...]}
+    slides: List[dict]  # [{"slide": 1, "text": "..."}]
+    sheets: dict  # {"Sheet1": [["hdr",...], ["row",...], ...]}
 
     # Conversation
     messages: Annotated[List[dict], operator.add]  # [{role, content}]
@@ -49,7 +50,6 @@ def build_graph() -> StateGraph:
         START → route (conditional) → suggest / verify / format / flag → END
     """
     graph = StateGraph(CitationState)
-
     # Add nodes
     graph.add_node("suggest_citations", suggest_citations)
     graph.add_node("verify_consistency", verify_consistency)

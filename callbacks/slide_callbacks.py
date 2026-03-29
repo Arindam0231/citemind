@@ -12,10 +12,11 @@ import os
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 
-from dash import Input, Output, State, callback_context, dcc, html, no_update
+from dash import Input, Output, State, callback_context, dcc, html, no_update, ALL
 from dash.exceptions import PreventUpdate
 
 from components.slide_panel import build_shape_overlay
+from components.excel_strip import build_sheet_tabs, build_mini_table
 from db.queries import (
     create_project,
     get_citation,
@@ -321,3 +322,97 @@ def register_slide_callbacks(app):
             str(stats.get("pending", 0)),
             str(stats.get("rejected", 0)),
         )
+
+    # ─────────────────────────────────────────────────────────
+    # 5. Excel Strip Callbacks
+    # ─────────────────────────────────────────────────────────
+    @app.callback(
+        Output("sheet-tabs", "children"),
+        Output("excel-strip-table", "children"),
+        Output("store-selected-sheet", "data"),
+        Input("store-sheets-raw", "data"),
+        Input({"type": "sheet-tab-btn", "sheet": ALL}, "n_clicks"),
+        State("store-selected-sheet", "data"),
+        prevent_initial_call=True,
+    )
+    def update_excel_strip(sheets_data, tab_clicks, current_sheet):
+        if not sheets_data:
+            raise PreventUpdate
+
+        ctx = callback_context
+        # Default target sheet
+        target_sheet = current_sheet
+        if not target_sheet or target_sheet not in sheets_data:
+            target_sheet = list(sheets_data.keys())[0] if sheets_data else None
+
+        if ctx.triggered:
+            trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
+            if "sheet-tab-btn" in trigger_id:
+                try:
+                    trigger_dict = json.loads(trigger_id)
+                    target_sheet = trigger_dict.get("sheet", target_sheet)
+                except Exception:
+                    pass
+
+        if not target_sheet:
+            return [], html.Div("No Excel data loaded.", className="empty-state"), None
+
+        sheet_names = list(sheets_data.keys())
+        tabs = build_sheet_tabs(sheet_names, active=target_sheet)
+
+        sdata = sheets_data[target_sheet]
+        headers = sdata.get("headers", [])
+        col_count = len(headers) or sdata.get("col_count", 0)
+        
+        # Build rows from cells
+        cells = sdata.get("cells", [])
+        rows_map = {}
+        for c in cells:
+            ri = c["row_index"]
+            # Skip header row if it exists
+            if ri == 0 and sdata.get("header_row") == 1:
+                continue
+            if ri not in rows_map:
+                rows_map[ri] = [""] * col_count
+            ci = c["col_index"]
+            if 0 <= ci < col_count:
+                rows_map[ri][ci] = c.get("display_value", "")
+
+        rows = []
+        for ri in sorted(rows_map.keys()):
+            rows.append(rows_map[ri])
+
+        table_component = build_mini_table(headers, rows)
+
+        return tabs, table_component, target_sheet
+
+    # ─────────────────────────────────────────────────────────
+    # 6. UI Toggle Callbacks
+    # ─────────────────────────────────────────────────────────
+    @app.callback(
+        Output("slide-viewer-wrapper", "className"),
+        Input("toggle-slide-viewer-btn", "n_clicks"),
+        State("slide-viewer-wrapper", "className"),
+        prevent_initial_call=True,
+    )
+    def toggle_slide_viewer(n_clicks, current_class):
+        if not current_class:
+            current_class = "slide-viewer"
+        if "collapsed" in current_class:
+            return current_class.replace(" collapsed", "")
+        else:
+            return current_class + " collapsed"
+
+    @app.callback(
+        Output("excel-strip-root", "className"),
+        Input("toggle-excel-strip-btn", "n_clicks"),
+        State("excel-strip-root", "className"),
+        prevent_initial_call=True,
+    )
+    def toggle_excel_strip(n_clicks, current_class):
+        if not current_class:
+            current_class = "excel-strip"
+        if "collapsed-strip" in current_class:
+            return current_class.replace(" collapsed-strip", "")
+        else:
+            return current_class + " collapsed-strip"

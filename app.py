@@ -4,9 +4,6 @@ CiteMind — Dash application entry point.
 """
 
 from __future__ import annotations
-from dotenv import load_dotenv
-
-load_dotenv()  # Load environment variables from .env file
 import os
 import sys
 
@@ -19,7 +16,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 from components.slide_panel import build_slide_panel
 from components.citation_panel import build_citation_panel
 from components.chat_panel import build_chat_panel
-from components.excel_strip import build_excel_strip
 
 app = dash.Dash(
     __name__,
@@ -69,6 +65,7 @@ def build_layout() -> html.Div:
             dcc.Store(id="store-xlsx-filename", data=None),
             dcc.Store(id="store-sheets-raw", data={}),
             dcc.Store(id="store-loading", data=False),
+            dcc.Store(id="store-selected-sheet", data=None),
             # ── Header ─────────────────────────────────────
             html.Header(
                 [

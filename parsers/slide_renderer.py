@@ -61,7 +61,9 @@ def _font_size_pt(run: Any) -> Optional[float]:
     """Return font size in points, or None."""
     try:
         if run.font.size:
-            return run.font.size.pt
+            # Scale down slightly (~85%) since web rendering of pt 
+            # often appears larger than native PPTX on desktop windows
+            return run.font.size.pt * 0.85
     except Exception:
         pass
     return None
