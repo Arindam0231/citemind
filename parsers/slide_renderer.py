@@ -61,7 +61,9 @@ def _font_size_pt(run: Any) -> Optional[float]:
     """Return font size in points, or None."""
     try:
         if run.font.size:
-            return run.font.size.pt
+            # Scale down slightly (~85%) since web rendering of pt
+            # often appears larger than native PPTX on desktop windows
+            return run.font.size.pt * 0.85
     except Exception:
         pass
     return None
@@ -155,6 +157,19 @@ def _table_html(shape: Any) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def extract_slide(pptx_bytes: bytes, slide_index: int) -> dict:
+    prs = Presentation(io.BytesIO(pptx_bytes))
+    slide_w = int(prs.slide_width)
+    slide_h = int(prs.slide_height)
+
+    slides = prs.slides
+    if slide_index < 0 or slide_index >= len(slides):
+        return _error_html("Slide index {} out of range".format(slide_index))
+
+    slide = slides[slide_index]
+    return {"slide": slide, "slide_w": slide_w, "slide_h": slide_h}
+
+
 def render_slide_to_html(pptx_bytes: bytes, slide_index: int) -> str:
     """
     Parse *pptx_bytes* with python-pptx and return a self-contained HTML
@@ -164,15 +179,10 @@ def render_slide_to_html(pptx_bytes: bytes, slide_index: int) -> str:
     with ``position:relative`` and a 16:9 (or actual slide) aspect ratio.
     """
     try:
-        prs = Presentation(io.BytesIO(pptx_bytes))
-        slide_w = int(prs.slide_width)
-        slide_h = int(prs.slide_height)
-
-        slides = prs.slides
-        if slide_index < 0 or slide_index >= len(slides):
-            return _error_html("Slide index {} out of range".format(slide_index))
-
-        slide = slides[slide_index]
+        extracted_slide = extract_slide(pptx_bytes, slide_index)
+        slide = extracted_slide["slide"]
+        slide_w = extracted_slide["slide_w"]
+        slide_h = extracted_slide["slide_h"]
         shapes_html = []
 
         # ── slide background ──────────────────────────────────────────────────

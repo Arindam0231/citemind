@@ -8,6 +8,7 @@ import json
 from typing import List, Optional
 
 from dash import html, dcc
+from components.excel_strip import build_excel_strip
 
 
 def build_slide_panel() -> html.Div:
@@ -31,6 +32,12 @@ def build_slide_panel() -> html.Div:
                     html.Button(
                         "Next →",
                         id="slide-next-btn",
+                        className="slide-nav-btn",
+                        n_clicks=0,
+                    ),
+                    html.Button(
+                        "Toggle Viewer",
+                        id="toggle-slide-viewer-btn",
                         className="slide-nav-btn",
                         n_clicks=0,
                     ),
@@ -71,10 +78,11 @@ def build_slide_panel() -> html.Div:
                     id="slide-container",
                     className="slide-container",
                 ),
+                id="slide-viewer-wrapper",
                 className="slide-viewer",
             ),
             # Excel strip at bottom
-            html.Div(id="excel-strip-container", className="excel-strip"),
+            build_excel_strip(),
         ],
         className="slide-panel",
     )

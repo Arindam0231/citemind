@@ -105,3 +105,56 @@ Organize your response as:
 - Total claims found: <N>
 - Supported: <N>
 - Gaps: <N>"""
+
+
+RESOLVE_MENTIONS_PROMPT = """You are a context resolution tool.
+The user wants to scope their query to specific slides or sheets.
+Based on the query: "{query}"
+
+=== PowerPoint File Context ===
+File Name: {pptx_name}
+Total Slides: {total_slides}
+
+Available Slides:
+{available_slides}
+
+=== Excel File Context ===
+File Name: {xlsx_name}
+
+Available Sheets:
+{available_sheets}
+
+Identify which slide indexes and sheet names the user is targeting.
+If the query does not specify scope at all, return empty lists for both.
+If there's high ambiguity or a partial match, set needs_clarification to true and explain why.
+
+Respond ONLY with valid JSON in the following format:
+{{
+  "slide_indexes": [0], // List of exact integers representing slide indices, or empty list []
+  "sheet_names": ["Sheet1"], // List of exact string names of sheets, or empty list []
+  "needs_clarification": false, // True if the intent is ambiguous
+  "clarification_message": "" // Message to user if needs_clarification is true
+}}"""
+
+
+FIND_RELATION_PROMPT = """After checking for consistency, a discrepancy was found.
+Slide Claim: "{claim}"
+
+Targeted Sheets for search:
+{active_sheets_context}
+
+Search the provided sheet rows for semantically related rows that might explain the gap or mismatch.
+Look for:
+- Alternate phrasings or aliases
+- Unit differences (e.g. thousands vs millions)
+- Slight date offsets (e.g. Q3 vs YTD)
+
+Respond ONLY with valid JSON in the following format:
+[{{
+  "row_ref": "[Sheet: '...'] Row N",
+  "match_strength": "High|Medium|Low",
+  "reason": "Explain why this might be the intended data",
+  "suggestion": "How the claim should be updated to match the data"
+}}]
+If no related data exists at all, return an empty list: []
+"""

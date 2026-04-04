@@ -17,6 +17,12 @@ def build_excel_strip() -> html.Div:
                 [
                     html.Span("EXCEL DATA", className="excel-strip-title"),
                     html.Div(id="sheet-tabs", className="sheet-tabs"),
+                    html.Button(
+                        "Toggle Data",
+                        id="toggle-excel-strip-btn",
+                        className="sheet-tab-btn",
+                        n_clicks=0,
+                    ),
                 ],
                 className="excel-strip-header",
             ),
@@ -32,6 +38,7 @@ def build_excel_strip() -> html.Div:
                 className="excel-strip-content",
             ),
         ],
+        id="excel-strip-root",
         className="excel-strip",
     )
 

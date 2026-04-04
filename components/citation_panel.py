@@ -43,6 +43,8 @@ def build_citation_panel() -> html.Div:
                 ],
                 className="citation-panel-header",
             ),
+            # HIL Verification Card Container
+            html.Div(id="hil-verification-container"),
             # Citation cards list
             html.Div(
                 html.Div(
