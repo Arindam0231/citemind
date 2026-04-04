@@ -66,6 +66,7 @@ def build_layout() -> html.Div:
             dcc.Store(id="store-sheets-raw", data={}),
             dcc.Store(id="store-loading", data=False),
             dcc.Store(id="store-selected-sheet", data=None),
+            dcc.Store(id="store-hil-payload", data=None),
             # ── Header ─────────────────────────────────────
             html.Header(
                 [

@@ -1,6 +1,7 @@
 """
 PPTX Parser — extracts text content from each slide.
 """
+
 import base64
 import io
 from pptx import Presentation
@@ -46,10 +47,12 @@ def format_slides_for_prompt(slides: list[dict]) -> str:
     """Format parsed slides into a readable string for LLM context."""
     if not slides:
         return "(No slides loaded)"
-
+    shapes = []
+    for slide_shapes in slides:
+        shapes.extend(slides[slide_shapes])
     lines = []
-    for s in slides:
-        lines.append(f"--- Slide {s['slide']} ---")
-        lines.append(s["text"] if s["text"] else "(empty slide)")
+    for s in shapes:
+        lines.append(f"--- Slide {s['slide_id']} ---")
+        lines.append(s["full_text"] if s["full_text"] else "(empty slide)")
         lines.append("")
     return "\n".join(lines)

@@ -23,6 +23,56 @@ log = logging.getLogger(__name__)
 def register_citation_callbacks(app):
 
     # ─────────────────────────────────────────────────────────
+    # HIL Verification Card Rendering
+    # ─────────────────────────────────────────────────────────
+    @app.callback(
+        Output("hil-verification-container", "children"),
+        Input("store-hil-payload", "data"),
+    )
+    def render_hil_card(payload):
+        if not payload:
+            return None
+            
+        payload_type = payload.get("type")
+        if payload_type == "relation_verification":
+            claim = payload.get("claim", "")
+            candidates = payload.get("candidates", [])
+            match = candidates[0] if candidates else {}
+            
+            return html.Div([
+                html.Div("⚠️ Gap found — AI suggested a match", className="hil-card-header", style={"fontWeight": "bold", "color": "#f59e0b"}),
+                html.Div([
+                    html.Strong("Slide claim: "), html.Span(claim)
+                ], className="hil-card-row"),
+                html.Div([
+                    html.Strong("Sheet match: "), html.Span(match.get("row_ref", "Unknown"))
+                ], className="hil-card-row"),
+                html.Div([
+                    html.Strong("Confidence: "), html.Span(match.get("match_strength", "Unknown"))
+                ], className="hil-card-row"),
+                html.Div([
+                    html.Strong("Reason: "), html.Span(match.get("reason", "Unknown"))
+                ], className="hil-card-row"),
+                html.Div([
+                    html.Button("✓ Accept", id="hil-accept-btn", className="ghost-btn ghost-btn-confirm", n_clicks=0),
+                    html.Button("✗ Reject", id="hil-reject-btn", className="ghost-btn ghost-btn-reject", n_clicks=0),
+                ], className="citation-actions", style={"marginTop": "10px"})
+            ], className="hil-verification-card", style={"border": "1px solid #f59e0b", "padding": "10px", "borderRadius": "8px", "marginBottom": "15px"})
+            
+        elif payload_type == "context_clarification":
+            msg = payload.get("message", "Please clarify context scope")
+            return html.Div([
+                html.Div("❓ Need Clarification", className="hil-card-header", style={"fontWeight": "bold", "color": "#3b82f6"}),
+                html.Div(msg, className="hil-card-row", style={"marginBottom": "10px"}),
+                html.Div([
+                    html.Button("✓ Confirm", id="hil-accept-btn", className="ghost-btn ghost-btn-confirm", n_clicks=0),
+                    html.Button("✗ Skip Scope", id="hil-reject-btn", className="ghost-btn ghost-btn-reject", n_clicks=0),
+                ], className="citation-actions")
+            ], className="hil-verification-card", style={"border": "1px solid #3b82f6", "padding": "10px", "borderRadius": "8px", "marginBottom": "15px"})
+            
+        return None
+
+    # ─────────────────────────────────────────────────────────
     # Tab Switching & Status Filtering
     # ─────────────────────────────────────────────────────────
     @app.callback(
