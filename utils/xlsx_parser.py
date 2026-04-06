@@ -1,9 +1,11 @@
 """
 XLSX Parser — extracts all sheets into structured dicts.
 """
+
 import base64
 import io
 from openpyxl import load_workbook
+import pandas as pd
 
 
 def parse_xlsx(contents_b64: str) -> dict:
@@ -45,9 +47,27 @@ def format_sheets_for_prompt(sheets: dict) -> str:
     if not sheets:
         return "(No Excel data loaded)"
 
+    for sheet_name, sheet_details in sheets.items():
+        columns = {}
+        for cell in sheet_details["cells"]:
+            if not cell["is_header"]:
+                columns[cell["col_index"]] = columns.get(cell["col_index"], [])
+                columns[cell["col_index"]].append(cell["display_value"])
+        for c_in, c_val in columns.items():
+            print(c_in, len(c_val))
+        for c_in, c_name in enumerate(sheet_details["headers"]):
+            print(c_in, len(columns.get(c_in, [])), c_name)
+        dataFrame = pd.DataFrame(
+            {
+                c_name: columns.get(c_in, [])
+                for c_in, c_name in enumerate(sheet_details["headers"])
+            }
+        )
+
+        print(dataFrame.to_string())
     lines = []
     for sheet_name, rows in sheets.items():
-        lines.append(f"=== Sheet: \"{sheet_name}\" ===")
+        lines.append(f'=== Sheet: "{sheet_name}" ===')
         if not rows:
             lines.append("(empty sheet)")
             lines.append("")
@@ -67,9 +87,7 @@ def format_sheets_for_prompt(sheets: dict) -> str:
 
         # Data rows (1-indexed from row 2 in spreadsheet, but row 1 in our list is header)
         for row_idx, row in enumerate(rows[1:], start=2):
-            cells = " | ".join(
-                str(v) for v in row
-            )
+            cells = " | ".join(str(v) for v in row)
             lines.append(f"Row {row_idx:>3}: {cells}")
 
         lines.append("")

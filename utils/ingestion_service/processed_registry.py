@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 
+# TODO :: Not in use
 class ParquetRegistry:
     """
     Manages processed parquet files with UUID-based storage.

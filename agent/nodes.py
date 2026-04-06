@@ -38,9 +38,6 @@ def _build_system_prompt(state: dict) -> str:
     slides = state.get("active_slides") or state.get("slides", [])
     sheets = state.get("active_sheets") or state.get("sheets", {})
     slides_ctx = format_slides_for_prompt(slides)
-    print(1)
-    print(sheets["Sheet 1"]["headers"])
-    print(sheets["Sheet 1"]["cells"][:5])
     sheets_ctx = format_sheets_for_prompt(sheets)
     print(2)
     return SYSTEM_PROMPT.format(
@@ -73,7 +70,7 @@ def resolve_mentions(state: dict) -> dict:
     """
     query = state.get("current_query", "")
     slides = state.get("slides", [])
-    sheets = state.get("sheets", {})
+    sheets = state.get("sheets", {}).get("cleaned", {})
 
     pptx_filename = state.get("pptx_filename", "Unknown PPTX")
     xlsx_filename = state.get("xlsx_filename", "Unknown XLSX")

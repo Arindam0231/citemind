@@ -2,11 +2,12 @@
 CiteMind — Excel data preview strip component.
 Compact table display at the bottom of the slide panel.
 """
+
 from __future__ import annotations
 
 from typing import List, Optional
 
-from dash import html
+from dash import html, dcc
 
 
 def build_excel_strip() -> html.Div:
@@ -17,10 +18,36 @@ def build_excel_strip() -> html.Div:
                 [
                     html.Span("EXCEL DATA", className="excel-strip-title"),
                     html.Div(id="sheet-tabs", className="sheet-tabs"),
+                    html.Div(
+                        dcc.RadioItems(
+                            id="data-view-toggle",
+                            options=[
+                                {"label": "Cleaned Data", "value": "cleaned"},
+                                {"label": "Raw Data", "value": "original"},
+                            ],
+                            value="cleaned",
+                            inline=True,
+                            className="view-toggle-radio",
+                        ),
+                        style={
+                            "marginLeft": "16px",
+                            "marginTop": "4px",
+                            "fontSize": "12px",
+                            "color": "#a0aabf",
+                        },
+                    ),
+                    html.Button(
+                        "Download Cleaned",
+                        id="download-processed-btn",
+                        className="sheet-tab-btn",
+                        style={"marginLeft": "8px"},
+                        n_clicks=0,
+                    ),
                     html.Button(
                         "Toggle Data",
                         id="toggle-excel-strip-btn",
                         className="sheet-tab-btn",
+                        style={"marginLeft": "8px"},
                         n_clicks=0,
                     ),
                 ],
@@ -30,7 +57,9 @@ def build_excel_strip() -> html.Div:
                 html.Div(
                     [
                         html.Div("📈", className="empty-state-icon"),
-                        html.Div("Upload .xlsx to see data", className="empty-state-text"),
+                        html.Div(
+                            "Upload .xlsx to see data", className="empty-state-text"
+                        ),
                     ],
                     className="empty-state",
                 ),
@@ -43,7 +72,9 @@ def build_excel_strip() -> html.Div:
     )
 
 
-def build_sheet_tabs(sheet_names: List[str], active: Optional[str] = None) -> List[html.Button]:
+def build_sheet_tabs(
+    sheet_names: List[str], active: Optional[str] = None
+) -> List[html.Button]:
     """Build sheet tab buttons."""
     tabs = []
     for name in sheet_names:
@@ -67,9 +98,7 @@ def build_mini_table(
     """Build a compact table for the excel strip."""
     cited = set(cited_cells or [])
 
-    header_row = html.Thead(
-        html.Tr([html.Th(h) for h in headers])
-    )
+    header_row = html.Thead(html.Tr([html.Th(h) for h in headers]))
 
     body_rows = []
     for row_data in rows[:50]:  # limit display to 50 rows
