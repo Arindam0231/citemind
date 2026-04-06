@@ -6,6 +6,8 @@ Handles file upload, slide navigation, and rendering shape overlays.
 from __future__ import annotations
 
 import base64
+import hashlib
+import io
 import json
 import logging
 import os
@@ -23,6 +25,7 @@ from db.queries import (
     get_citations_for_project,
     get_citations_for_slide,
     get_excel_sheets,
+    get_cells_for_sheet,
     get_project_stats,
     get_shapes_for_slide,
     get_slide,
@@ -34,12 +37,16 @@ from db.queries import (
     insert_shapes_bulk,
     insert_slide,
     insert_xlsx_file,
+    get_xlsx_file_by_sha256,
+    get_xlsx_file,
     mark_pptx_parsed,
     mark_xlsx_parsed,
 )
 from parsers.pptx_parser import parse_pptx_file
 from parsers.slide_renderer import render_slide_to_html
 from parsers.xlsx_parser import parse_workbook
+
+import openpyxl
 
 log = logging.getLogger(__name__)
 
@@ -119,53 +126,152 @@ def register_slide_callbacks(app):
         Output("store-xlsx-filename", "data"),
         Output("store-xlsx-file-id", "data"),
         Output("store-sheets-raw", "data"),
+        Output("store-chat-history", "data", allow_duplicate=True),
         Input("upload-xlsx", "contents"),
         State("upload-xlsx", "filename"),
+        State("store-chat-history", "data"),
         prevent_initial_call=True,
     )
-    def upload_xlsx(contents, filename):
+    def upload_xlsx(contents, filename, chat_history):
         if not contents:
             raise PreventUpdate
         try:
-            parsed = parse_workbook(contents)
+            # We strip data URI prefix to hash
+            raw = base64.b64decode(
+                contents.split(",", 1)[1] if "," in contents else contents
+            )
+            sha = hashlib.sha256(raw).hexdigest()
+
+            search_sha = sha
+
+            # Fast-check if this is a previously cleaned file with embedded metadata
+            try:
+                temp_wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True)
+                prop_id = temp_wb.properties.identifier
+                temp_wb.close()
+                if prop_id and str(prop_id).startswith("citemind_"):
+                    search_sha = str(prop_id).split("citemind_")[1]
+            except Exception:
+                pass
+
+            # Check if exists (original or embedded hash)
+            existing = get_xlsx_file_by_sha256(search_sha)
+            # if existing:
+            #     fid = existing["id"]
+            #     sheets_db = get_excel_sheets(fid)
+            #     sheets_raw = {"original": {}, "cleaned": {}}
+            #     for s in sheets_db:
+            #         sid = s["id"]
+            #         cells = get_cells_for_sheet(sid)
+            #         cat = "cleaned" if s.get("is_cleaned", 1) else "original"
+            #         sheets_raw[cat][s["sheet_name"]] = {
+            #             "sheet_index": s["sheet_index"],
+            #             "row_count": s["row_count"],
+            #             "col_count": s["col_count"],
+            #             "header_row": s["header_row"],
+            #             "headers": json.loads(s["headers_json"]) if s.get("headers_json") else [],
+            #             "cells": cells
+            #         }
+            #     return (
+            #         "file-badge loaded",
+            #         [html.Span(className="dot"), f" ✓ {filename}"],
+            #         filename,
+            #         fid,
+            #         sheets_raw,
+            #     )
+
+            # Not cached, parse normally
+            parsed = parse_workbook(contents, filename)
 
             fid = insert_xlsx_file(
                 original_name=filename,
-                storage_path="",
+                storage_path=parsed.get("processed_path", ""),
                 sheet_names=parsed["sheet_names"],
                 sha256=parsed["sha256"],
             )
 
             # Insert sheets & cells
-            for sname, sdata in parsed["sheets"].items():
-                sid = insert_excel_sheet(
-                    xlsx_file_id=fid,
-                    sheet_name=sname,
-                    sheet_index=sdata["sheet_index"],
-                    row_count=sdata["row_count"],
-                    col_count=sdata["col_count"],
-                    header_row=sdata["header_row"],
-                    headers_json=json.dumps(sdata["headers"]),
-                )
-                if sdata["cells"]:
-                    bulk_cells = []
-                    for c in sdata["cells"]:
-                        c["sheet_id"] = sid
-                        bulk_cells.append(c)
-                    insert_cells_bulk(bulk_cells)
+            sheets_raw = {"original": {}, "cleaned": {}}
+            for cat, sheets_dict, is_clean in [
+                ("original", parsed["original_sheets"], False),
+                ("cleaned", parsed["cleaned_sheets"], True),
+            ]:
+                for sname, sdata in sheets_dict.items():
+                    sid = insert_excel_sheet(
+                        xlsx_file_id=fid,
+                        sheet_name=sname,
+                        sheet_index=sdata["sheet_index"],
+                        row_count=sdata["row_count"],
+                        col_count=sdata["col_count"],
+                        header_row=sdata["header_row"],
+                        headers_json=json.dumps(sdata["headers"]),
+                        is_cleaned=is_clean,
+                    )
+                    if sdata["cells"]:
+                        bulk_cells = []
+                        for c in sdata["cells"]:
+                            c["sheet_id"] = sid
+                            bulk_cells.append(c)
+                        insert_cells_bulk(bulk_cells)
+                    sheets_raw[cat][sname] = sdata
 
             mark_xlsx_parsed(fid)
-
+            ingestion_report = parsed.get("ingestion_report", {})
+            chat_history.append(
+                {
+                    "role": "system",
+                    "content": f"Excel file '{filename}' ingested {json.dumps(ingestion_report,indent=4)}",
+                }
+            )
             return (
                 "file-badge loaded",
                 [html.Span(className="dot"), f" ✓ {filename}"],
                 filename,
                 fid,
-                parsed["sheets"],
+                sheets_raw,
+                chat_history,
             )
         except Exception as e:
+            chat_history.append(
+                {
+                    "role": "system",
+                    "content": f"Error ingesting Excel file '{filename}': {str(e)}",
+                }
+            )
             log.error("XLSX error: %s", e)
-            return "file-badge", [html.Span(className="dot"), " XLSX"], None, None, {}
+            return (
+                "file-badge",
+                [html.Span(className="dot"), " XLSX"],
+                None,
+                None,
+                {},
+                chat_history,
+            )
+
+    # ─────────────────────────────────────────────────────────
+    # Download Cleaned Excel
+    # ─────────────────────────────────────────────────────────
+    @app.callback(
+        Output("download-processed-xlsx", "data"),
+        Input("download-processed-btn", "n_clicks"),
+        State("store-xlsx-file-id", "data"),
+        prevent_initial_call=True,
+    )
+    def download_cleaned_xlsx(n_clicks, fid):
+        if not n_clicks or not fid:
+            raise PreventUpdate
+
+        file_info = get_xlsx_file(fid)
+        if not file_info or not file_info.get("storage_path"):
+            log.warning("No storage path found for file %s", fid)
+            raise PreventUpdate
+
+        storage_path = file_info["storage_path"]
+        if not os.path.exists(storage_path):
+            log.warning("Storage path does not exist: %s", storage_path)
+            raise PreventUpdate
+
+        return dcc.send_file(storage_path)
 
     # ─────────────────────────────────────────────────────────
     # 2. Workspace View Transition
@@ -332,18 +438,27 @@ def register_slide_callbacks(app):
         Output("store-selected-sheet", "data"),
         Input("store-sheets-raw", "data"),
         Input({"type": "sheet-tab-btn", "sheet": ALL}, "n_clicks"),
+        Input("data-view-toggle", "value"),
         State("store-selected-sheet", "data"),
         prevent_initial_call=True,
     )
-    def update_excel_strip(sheets_data, tab_clicks, current_sheet):
+    def update_excel_strip(sheets_data, tab_clicks, view_mode, current_sheet):
         if not sheets_data:
             raise PreventUpdate
+
+        view_mode = view_mode or "cleaned"
+        target_view_data = sheets_data.get(view_mode, sheets_data.get("cleaned", {}))
+
+        if not target_view_data:
+            return [], html.Div("No Excel data loaded.", className="empty-state"), None
 
         ctx = callback_context
         # Default target sheet
         target_sheet = current_sheet
-        if not target_sheet or target_sheet not in sheets_data:
-            target_sheet = list(sheets_data.keys())[0] if sheets_data else None
+        if not target_sheet or target_sheet not in target_view_data:
+            target_sheet = (
+                list(target_view_data.keys())[0] if target_view_data else None
+            )
 
         if ctx.triggered:
             trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
@@ -357,13 +472,13 @@ def register_slide_callbacks(app):
         if not target_sheet:
             return [], html.Div("No Excel data loaded.", className="empty-state"), None
 
-        sheet_names = list(sheets_data.keys())
+        sheet_names = list(target_view_data.keys())
         tabs = build_sheet_tabs(sheet_names, active=target_sheet)
 
-        sdata = sheets_data[target_sheet]
+        sdata = target_view_data[target_sheet]
         headers = sdata.get("headers", [])
         col_count = len(headers) or sdata.get("col_count", 0)
-        
+
         # Build rows from cells
         cells = sdata.get("cells", [])
         rows_map = {}

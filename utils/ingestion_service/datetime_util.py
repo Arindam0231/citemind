@@ -209,7 +209,7 @@ Return ONLY a valid JSON object, no explanation, no markdown, no code fences:
         )
     ]
 
-    result_df, rename_map = llm_exec_with_retry(
+    code_response = llm_exec_with_retry(
         fn_name="build_rename_and_melt",
         messages=messages,
         fn_kwargs={
@@ -223,7 +223,8 @@ Return ONLY a valid JSON object, no explanation, no markdown, no code fences:
         exec_globals={"pd": pd, "re": re},
         max_retries=3,
     )
-
+    result_df = code_response["result"]
+    rename_map = code_response["response"].get("reasoning", "")
     if result_df is None or not isinstance(result_df, pd.DataFrame):
         raise ValueError("LLM exec did not produce a valid result_df")
 
@@ -278,14 +279,72 @@ def _fallback_rename_and_melt(
 # ─────────────────────────────────────────────
 
 
+def _llm_confirm_datetime_columns(
+    df: pd.DataFrame, candidate_cols: list[str]
+) -> list[str]:
+    """
+    Given candidates based on simple keyword or datetime conversion heuristics,
+    ask the LLM to inspect the column names and their sample values to confirm
+    whether they are truly datetime columns or actually numeric/categorical columns
+    with misleading names (like 'Number of cases in Aug 2024').
+    """
+    import json
+
+    if not candidate_cols:
+        return []
+
+    candidates_context = {}
+    for col in candidate_cols:
+        sample = df[col].dropna().astype(str).head(10).tolist()
+        candidates_context[str(col)] = sample
+
+    prompt = f"""
+We have identified potential datetime columns based on basic keyword matching or naive parsing.
+However, we need to prevent hallucinations where normal numeric columns (like 'Number of cases') 
+or identifiers are mistakenly treated as dates just because their name contains a word like 'year' or 'date'.
+
+Candidate Columns and their sample values:
+{json.dumps(candidates_context, indent=2)}
+
+For each column name, determine if the COLUMN VALUES represents actual Date/Time information (e.g., timestamps, dates, times) 
+OR if they are just normal data (e.g. integer counts, 'number of cases', IDs) that happen to have a date keyword in the name.
+
+If YES (values are dates/times) → return true
+If NO (values are regular numbers, counts, IDs, etc)  → return false
+
+Rules:
+- Return ONLY a valid JSON object, no explanation, no markdown, no code fences
+- Keys must be the original column names exactly as provided
+- Values must be boolean true or false
+- Reasoning must be no more than 2 sentences total, covering all columns
+
+Return in this exact structure:
+{{
+    "response": {{"Created Date": true, "Number of cases in Aug 2024": false}},
+    "reasoning": "Created Date consists of timestamps. Number of cases is an integer count, not a datetime."
+}}
+"""
+    response = llm_service([HumanMessage(content=prompt)])
+    import pprint
+
+    print(f"LLM Response: {response}")
+    if isinstance(response, dict):
+        result_dict = response.get("response", response)
+        # Handle cases where the LLM might nest or not nest
+        if isinstance(result_dict, dict):
+            return [col for col in candidate_cols if result_dict.get(str(col), False)]
+    return candidate_cols
+
+
 def detect_datetime_value_columns(df: pd.DataFrame) -> list[str]:
     """
     Detect columns whose VALUES are datetimes, using:
     1. dtype check
-    2. column name keyword check
-    3. sampling fallback
+    2. column name keyword check + fallback sample check
+    3. LLM verification to prevent hallucinating counts as dates
     """
     datetime_cols = []
+    candidate_cols = []
 
     for col in df.columns:
         # Already a datetime dtype
@@ -293,19 +352,31 @@ def detect_datetime_value_columns(df: pd.DataFrame) -> list[str]:
             datetime_cols.append(col)
             continue
 
-        # Column name contains datetime keywords
-        if any(kw in col.lower() for kw in DATETIME_KEYWORDS):
-            datetime_cols.append(col)
-            continue
+        # Use regex word boundaries for keywords rather than naive 'in'
+        col_lower = str(col).lower()
+        has_keyword = any(
+            re.search(r"\b" + kw + r"\b", col_lower) for kw in DATETIME_KEYWORDS
+        )
+        should_candidate = has_keyword
 
-        # Fallback: try parsing a sample
-        if df[col].dtype == object:
-            sample = df[col].dropna().head(10)
-            try:
-                pd.to_datetime(sample)
-                datetime_cols.append(col)
-            except Exception:
-                pass
+        # Fallback: try parsing a sample if no keyword
+        if not should_candidate and df[col].dtype == object:
+            sample = df[col].dropna().astype(str).head(10)
+            if not sample.empty:
+                # Do not indiscriminately parse pure numbers as datetimes
+                if not sample.str.match(r"^-?\d+\.?\d*$").all():
+                    try:
+                        pd.to_datetime(sample)
+                        should_candidate = True
+                    except Exception:
+                        pass
+
+        if should_candidate:
+            candidate_cols.append(col)
+
+    if candidate_cols:
+        confirmed_cols = _llm_confirm_datetime_columns(df, candidate_cols)
+        datetime_cols.extend(confirmed_cols)
 
     return datetime_cols
 
@@ -361,13 +432,15 @@ Return ONLY a valid JSON object, no explanation, no markdown, no code fences:
         )
     ]
 
-    parsed_series: pd.Series = llm_exec_with_retry(
+    code_response = llm_exec_with_retry(
         fn_name="parse_dates",
         messages=messages,
         fn_kwargs={"series": df[col]},
         exec_globals={"pd": pd, "datetime": _datetime},
         max_retries=3,
     )
+    parsed_series = code_response["result"]
+    message = code_response["response"].get("reasoning", "")
     new_nulls = int(parsed_series.isna().sum())
     failed_count = max(0, new_nulls - original_nulls)
     failure_rate = failed_count / max(len(df), 1)
@@ -380,6 +453,7 @@ Return ONLY a valid JSON object, no explanation, no markdown, no code fences:
         "failure_rate_pct": round(failure_rate * 100, 2),
         "target_format": target_format,
         "sample_output": parsed_series.dropna().head(3).tolist(),
+        "reasoning": message,
     }
 
     return parsed_series, report

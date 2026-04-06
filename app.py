@@ -67,6 +67,8 @@ def build_layout() -> html.Div:
             dcc.Store(id="store-loading", data=False),
             dcc.Store(id="store-selected-sheet", data=None),
             dcc.Store(id="store-hil-payload", data=None),
+            # Downloader component for processed excel
+            dcc.Download(id="download-processed-xlsx"),
             # ── Header ─────────────────────────────────────
             html.Header(
                 [
@@ -125,22 +127,28 @@ def build_layout() -> html.Div:
                         "linking citations between slides and data.",
                         className="upload-subtitle",
                     ),
-                    html.Div(
-                        [
-                            dcc.Upload(
-                                id="upload-pptx",
-                                children=_upload_zone("pptx"),
-                                className="upload-component",
-                                accept=".pptx",
-                            ),
-                            dcc.Upload(
-                                id="upload-xlsx",
-                                children=_upload_zone("xlsx"),
-                                className="upload-component",
-                                accept=".xlsx",
-                            ),
-                        ],
-                        className="upload-row",
+                    dcc.Loading(
+                        id="loading-upload",
+                        type="circle",
+                        children=[
+                            html.Div(
+                                [
+                                    dcc.Upload(
+                                        id="upload-pptx",
+                                        children=_upload_zone("pptx"),
+                                        className="upload-component",
+                                        accept=".pptx",
+                                    ),
+                                    dcc.Upload(
+                                        id="upload-xlsx",
+                                        children=_upload_zone("xlsx"),
+                                        className="upload-component",
+                                        accept=".xlsx",
+                                    ),
+                                ],
+                                className="upload-row",
+                            )
+                        ]
                     ),
                 ],
                 id="upload-landing",

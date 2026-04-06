@@ -80,7 +80,8 @@ CREATE TABLE IF NOT EXISTS excel_sheets (
     row_count    INTEGER NOT NULL DEFAULT 0,
     col_count    INTEGER NOT NULL DEFAULT 0,
     header_row   INTEGER,
-    headers_json TEXT  -- JSON array
+    headers_json TEXT,  -- JSON array
+    is_cleaned   INTEGER NOT NULL DEFAULT 1
 );
 
 -- excel_cells: atomic unit of Excel data

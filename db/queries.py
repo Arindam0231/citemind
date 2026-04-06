@@ -110,6 +110,18 @@ def mark_xlsx_parsed(file_id: str) -> None:
         )
 
 
+def get_xlsx_file_by_sha256(sha256: str) -> Optional[dict]:
+    with get_db() as db:
+        row = db.execute("SELECT * FROM xlsx_files WHERE sha256=?", (sha256,)).fetchone()
+        return dict(row) if row else None
+
+
+def get_xlsx_file(file_id: str) -> Optional[dict]:
+    with get_db() as db:
+        row = db.execute("SELECT * FROM xlsx_files WHERE id=?", (file_id,)).fetchone()
+        return dict(row) if row else None
+
+
 # ── Slides ────────────────────────────────────────────────
 
 
@@ -225,16 +237,17 @@ def insert_excel_sheet(
     col_count: int = 0,
     header_row: Optional[int] = None,
     headers_json: Optional[str] = None,
+    is_cleaned: bool = True,
 ) -> str:
     sid = _uuid()
     with get_db() as db:
         db.execute(
             """INSERT INTO excel_sheets
                (id, xlsx_file_id, sheet_name, sheet_index,
-                row_count, col_count, header_row, headers_json)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                row_count, col_count, header_row, headers_json, is_cleaned)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (sid, xlsx_file_id, sheet_name, sheet_index,
-             row_count, col_count, header_row, headers_json),
+             row_count, col_count, header_row, headers_json, int(is_cleaned)),
         )
     return sid
 

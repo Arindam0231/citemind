@@ -5,9 +5,9 @@ import re
 from pathlib import Path
 from agent.llm_utils import llm_service, llm_exec_with_retry
 from utils.ingestion_service.standard_data_pipeline import standard_data_pipeline
-from utils.ingestion_service.processed_registry import ParquetRegistry
 from langchain_core.messages import HumanMessage, SystemMessage
 import json
+from openpyxl import Workbook
 
 
 class IngestedMetadata(TypedDict):
@@ -19,17 +19,14 @@ class IngestedMetadata(TypedDict):
     BaseProfile: Dict[str, Any]  # Basic profile info (row count, column count, etc.)
     ColumnProfiles: Dict[str, Dict[str, Any]]  # Detailed profile for each column
     CategoricalInsights: Dict[str, Dict[str, Any]]  # Insights for categorical columns
-    SavedParquetPath: str
+    ProcessedDF: pd.DataFrame
+    ReportTransformation: Dict[str, Any]  # Report from peek_and_transform step
 
 
 class DataIngestionService:
     """Service for handling data upload, parsing, and profiling"""
 
-    def __init__(self, index_filepath=None):
-        self.processed_registry = ParquetRegistry()
-        self.index_filepath = index_filepath
-
-    def register_data(self, user_id: str, data_paths: Dict[str, str]) -> Dict[str, Any]:
+    def register_data(self, data_paths: Dict[str, str]) -> Dict[str, Any]:
         """Register dataframes from provided paths and generate metadata"""
         df_registry = {}
         for identifier, path in data_paths.items():
@@ -38,8 +35,8 @@ class DataIngestionService:
                 pre_data_snippets = self.parse_file(path)
                 for key, value in pre_data_snippets.items():
                     if isinstance(value, pd.DataFrame):
-                        processed_id, processed_df = self.peek_and_transform(
-                            value, path, sheet_name=key, user_id=user_id
+                        processed_df, report_transformation = self.peek_and_transform(
+                            value, path, sheet_name=key
                         )
                         profile = self.profile_dataframe(processed_df)
                         column_types = self.detect_column_types(processed_df)
@@ -55,7 +52,8 @@ class DataIngestionService:
                                 BaseProfile=profile,
                                 ColumnProfiles=column_types,
                                 CategoricalInsights=categorical_insights,
-                                SavedParquetPath=processed_id,
+                                ProcessedDF=processed_df,  # type: ignore - for internal use, not part of the TypedDict
+                                ReportTransformation=report_transformation,
                             )
                         )
 
@@ -68,33 +66,39 @@ class DataIngestionService:
 
     def parse_file(self, file_path: str) -> pd.DataFrame:
         """Parse uploaded file into DataFrame"""
-        file_ext = Path(file_path).suffix.lower()
 
         try:
-            if file_ext == ".csv":
-                df = pd.read_csv(file_path, header=None)
-                response = {"default": df}
-            elif file_ext in [".xlsx", ".xls"]:
-                response = pd.read_excel(
-                    file_path, sheet_name=None, header=None, engine="openpyxl"
-                )
-            elif file_ext == ".json":
-                df = pd.read_json(file_path)
-                if not isinstance(df, pd.DataFrame):
-                    raise ValueError(
-                        f"File did not produce a tabular DataFrame: {file_path}"
-                    )
-                response = {"default": df}
-            elif file_ext == ".parquet":
-                df = pd.read_parquet(file_path)
-                if not isinstance(df, pd.DataFrame):
-                    raise ValueError(
-                        f"File did not produce a tabular DataFrame: {file_path}"
-                    )
-                response = {"default": df}
+            if isinstance(file_path, Workbook):
+                # Raw Workbook parsing
+                response = {}
+                for sheet_idx, sheet_name in enumerate(file_path.sheetnames):
+                    ws = file_path[sheet_name]
+                    response[sheet_name] = pd.DataFrame(list(ws.values))
             else:
-                raise ValueError(f"Unsupported file format: {file_ext}")
-
+                file_ext = Path(file_path).suffix.lower()
+                if file_ext == ".csv":
+                    df = pd.read_csv(file_path, header=None)
+                    response = {"default": df}
+                elif file_ext in [".xlsx", ".xls"]:
+                    response = pd.read_excel(
+                        file_path, sheet_name=None, header=None, engine="openpyxl"
+                    )
+                elif file_ext == ".json":
+                    df = pd.read_json(file_path)
+                    if not isinstance(df, pd.DataFrame):
+                        raise ValueError(
+                            f"File did not produce a tabular DataFrame: {file_path}"
+                        )
+                    response = {"default": df}
+                elif file_ext == ".parquet":
+                    df = pd.read_parquet(file_path)
+                    if not isinstance(df, pd.DataFrame):
+                        raise ValueError(
+                            f"File did not produce a tabular DataFrame: {file_path}"
+                        )
+                    response = {"default": df}
+                else:
+                    raise ValueError(f"Unsupported file type: {file_ext}")
             return response
         except Exception as e:
             raise Exception(f"Error parsing file: {str(e)}")
@@ -221,7 +225,6 @@ class DataIngestionService:
         peek_df: pd.DataFrame,
         original_filename: str,
         sheet_name: Optional[str] = None,
-        user_id: Optional[str] = None,
     ) -> pd.DataFrame:
         """Transform a raw header=None DataFrame using LLM-guided header detection.
 
@@ -255,16 +258,8 @@ class DataIngestionService:
             If the LLM returns unsafe or malformed code.
         """
         try:
-
-            # ------------------------------------------------------------------
-            # 4. Standardise datetime columns via datetime_util
-            # ------------------------------------------------------------------
-            df = standard_data_pipeline(peek_df)
-            # TODO log datetime report
-            saved_id = self.processed_registry.register(
-                df, original_filename, sheet_name, user_id=user_id
-            )
-            return (saved_id, df)
+            df, report = standard_data_pipeline(peek_df)
+            return df, report
 
         except Exception as exc:
             raise ValueError(f"peek_and_transform failed: {exc}") from exc

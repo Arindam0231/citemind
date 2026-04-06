@@ -221,7 +221,7 @@ def llm_exec_with_retry(
                     "result_type": type(result).__name__,
                 },
             )
-            return result
+            return {"response": parsed, "result": result}
         except Exception as exc:
             last_error = f"{fn_name}() raised {type(exc).__name__}: {exc}"
             logger.warning(
