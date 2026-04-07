@@ -212,6 +212,22 @@ def parse_workbook(
             sheet_data["sheet_name"]: sheet_data.get("ReportTransformation", {})
             for sheet_data in data_ingested[filename]
         },
+        "llm_insights": {
+            sheet_data["sheet_name"]: sheet_data.get("LLMInsights", {})
+            for sheet_data in data_ingested[filename]
+        },
+        "base_profiles": {
+            sheet_data["sheet_name"]: sheet_data.get("BaseProfile", {})
+            for sheet_data in data_ingested[filename]
+        },
+        "column_profiles": {
+            sheet_data["sheet_name"]: sheet_data.get("ColumnProfiles", {})
+            for sheet_data in data_ingested[filename]
+        },
+        "categorical_insights": {
+            sheet_data["sheet_name"]: sheet_data.get("CategoricalInsights", {})
+            for sheet_data in data_ingested[filename]
+        },
     }
 
 

@@ -39,7 +39,6 @@ def _build_system_prompt(state: dict) -> str:
     sheets = state.get("active_sheets") or state.get("sheets", {})
     slides_ctx = format_slides_for_prompt(slides)
     sheets_ctx = format_sheets_for_prompt(sheets)
-    print(2)
     return SYSTEM_PROMPT.format(
         slides_context=slides_ctx,
         sheets_context=sheets_ctx,
@@ -147,7 +146,7 @@ def route_query(state: dict) -> str:
     print("Routing query:", state.get("current_query", ""))
     query = state.get("current_query", "")
     system = _build_system_prompt(state)
-    print("Gett system prompt for routing:", system)
+    print("Get system prompt for routing:", system)
     prompt = ROUTING_PROMPT.format(query=query)
     print("System prompt for routing:", system)
     result = _call_claude(system, prompt, max_tokens=20).strip().lower()

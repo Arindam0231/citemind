@@ -38,8 +38,15 @@ def create_project(
             """INSERT INTO projects
                (id, name, created_at, updated_at, pptx_file_id, xlsx_file_id, status, meta)
                VALUES (?, ?, ?, ?, ?, ?, 'active', ?)""",
-            (pid, name, now, now, pptx_file_id, xlsx_file_id,
-             json.dumps(meta) if meta else None),
+            (
+                pid,
+                name,
+                now,
+                now,
+                pptx_file_id,
+                xlsx_file_id,
+                json.dumps(meta) if meta else None,
+            ),
         )
     return pid
 
@@ -68,8 +75,16 @@ def insert_pptx_file(
                (id, original_name, storage_path, slide_count,
                 slide_width_emu, slide_height_emu, sha256, uploaded_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (fid, original_name, storage_path, slide_count,
-             slide_width_emu, slide_height_emu, sha256, _now()),
+            (
+                fid,
+                original_name,
+                storage_path,
+                slide_count,
+                slide_width_emu,
+                slide_height_emu,
+                sha256,
+                _now(),
+            ),
         )
     return fid
 
@@ -112,7 +127,9 @@ def mark_xlsx_parsed(file_id: str) -> None:
 
 def get_xlsx_file_by_sha256(sha256: str) -> Optional[dict]:
     with get_db() as db:
-        row = db.execute("SELECT * FROM xlsx_files WHERE sha256=?", (sha256,)).fetchone()
+        row = db.execute(
+            "SELECT * FROM xlsx_files WHERE sha256=?", (sha256,)
+        ).fetchone()
         return dict(row) if row else None
 
 
@@ -142,8 +159,17 @@ def insert_slide(
                (id, pptx_file_id, slide_index, slide_number, title,
                 png_path, shape_count, has_table, has_chart)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (sid, pptx_file_id, slide_index, slide_number, title,
-             png_path, shape_count, int(has_table), int(has_chart)),
+            (
+                sid,
+                pptx_file_id,
+                slide_index,
+                slide_number,
+                title,
+                png_path,
+                shape_count,
+                int(has_table),
+                int(has_chart),
+            ),
         )
     return sid
 
@@ -186,8 +212,20 @@ def insert_shape(
                (id, slide_id, pptx_shape_id, shape_name, shape_type,
                 x_pct, y_pct, w_pct, h_pct, full_text, runs_json, z_order)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (shid, slide_id, pptx_shape_id, shape_name, shape_type,
-             x_pct, y_pct, w_pct, h_pct, full_text, runs_json, z_order),
+            (
+                shid,
+                slide_id,
+                pptx_shape_id,
+                shape_name,
+                shape_type,
+                x_pct,
+                y_pct,
+                w_pct,
+                h_pct,
+                full_text,
+                runs_json,
+                z_order,
+            ),
         )
     return shid
 
@@ -204,9 +242,20 @@ def insert_shapes_bulk(shapes: List[dict]) -> List[str]:
                    (id, slide_id, pptx_shape_id, shape_name, shape_type,
                     x_pct, y_pct, w_pct, h_pct, full_text, runs_json, z_order)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (shid, s["slide_id"], s["pptx_shape_id"], s["shape_name"],
-                 s["shape_type"], s["x_pct"], s["y_pct"], s["w_pct"], s["h_pct"],
-                 s.get("full_text"), s.get("runs_json"), s.get("z_order", 0)),
+                (
+                    shid,
+                    s["slide_id"],
+                    s["pptx_shape_id"],
+                    s["shape_name"],
+                    s["shape_type"],
+                    s["x_pct"],
+                    s["y_pct"],
+                    s["w_pct"],
+                    s["h_pct"],
+                    s.get("full_text"),
+                    s.get("runs_json"),
+                    s.get("z_order", 0),
+                ),
             )
     return ids
 
@@ -246,8 +295,17 @@ def insert_excel_sheet(
                (id, xlsx_file_id, sheet_name, sheet_index,
                 row_count, col_count, header_row, headers_json, is_cleaned)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (sid, xlsx_file_id, sheet_name, sheet_index,
-             row_count, col_count, header_row, headers_json, int(is_cleaned)),
+            (
+                sid,
+                xlsx_file_id,
+                sheet_name,
+                sheet_index,
+                row_count,
+                col_count,
+                header_row,
+                headers_json,
+                int(is_cleaned),
+            ),
         )
     return sid
 
@@ -259,6 +317,14 @@ def get_excel_sheets(xlsx_file_id: str) -> List[dict]:
             (xlsx_file_id,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+def get_excel_sheet_data(sheet_id: str) -> Optional[dict]:
+    with get_db() as db:
+        row = db.execute(
+            "SELECT * FROM excel_sheets WHERE id=?", (sheet_id,)
+        ).fetchone()
+        return dict(row) if row else None
 
 
 # ── Excel Cells ───────────────────────────────────────────
@@ -275,10 +341,19 @@ def insert_cells_bulk(cells: List[dict]) -> None:
                     raw_value, numeric_value, data_type, display_value,
                     row_context, is_header)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (cid, c["sheet_id"], c["cell_address"], c["row_index"],
-                 c["col_index"], c.get("raw_value"), c.get("numeric_value"),
-                 c["data_type"], c.get("display_value"), c.get("row_context"),
-                 int(c.get("is_header", False))),
+                (
+                    cid,
+                    c["sheet_id"],
+                    c["cell_address"],
+                    c["row_index"],
+                    c["col_index"],
+                    c.get("raw_value"),
+                    c.get("numeric_value"),
+                    c["data_type"],
+                    c.get("display_value"),
+                    c.get("row_context"),
+                    int(c.get("is_header", False)),
+                ),
             )
 
 
@@ -308,7 +383,8 @@ def search_cells_by_value(
         # Exact numeric match
         try:
             import re
-            cleaned = re.sub(r'[₹$,% ]', '', value)
+
+            cleaned = re.sub(r"[₹$,% ]", "", value)
             numeric = float(cleaned)
             rows = db.execute(
                 """SELECT c.*, s.sheet_name
@@ -354,8 +430,7 @@ def search_cells_by_value(
                    AND c.id NOT IN ({})""".format(
                     ",".join(["?"] * len(results)) if results else "''"
                 ),
-                [xlsx_file_id, "%" + value + "%"] +
-                [r["id"] for r in results],
+                [xlsx_file_id, "%" + value + "%"] + [r["id"] for r in results],
             ).fetchall()
             for r in rows:
                 d = dict(r)
@@ -404,11 +479,24 @@ def insert_citation(
                 is_calculated, formula, ai_confidence, ai_reasoning,
                 match_method, status, created_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (cid, project_id, shape_id,
-             json.dumps(run_indices) if run_indices else None,
-             text_snippet, char_start, char_end, cell_id, cell_ids_json,
-             int(is_calculated), formula, ai_confidence, ai_reasoning,
-             match_method, status, _now()),
+            (
+                cid,
+                project_id,
+                shape_id,
+                json.dumps(run_indices) if run_indices else None,
+                text_snippet,
+                char_start,
+                char_end,
+                cell_id,
+                cell_ids_json,
+                int(is_calculated),
+                formula,
+                ai_confidence,
+                ai_reasoning,
+                match_method,
+                status,
+                _now(),
+            ),
         )
     return cid
 
@@ -483,7 +571,9 @@ def update_citation_status(
 
 def get_citation(citation_id: str) -> Optional[dict]:
     with get_db() as db:
-        row = db.execute("SELECT * FROM citations WHERE id=?", (citation_id,)).fetchone()
+        row = db.execute(
+            "SELECT * FROM citations WHERE id=?", (citation_id,)
+        ).fetchone()
         return dict(row) if row else None
 
 
@@ -547,9 +637,18 @@ def save_chat_message(
                (id, thread_id, role, content, selection_event_id,
                 citation_ids, tool_calls, model, tokens_used, created_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (mid, thread_id, role, content, selection_event_id,
-             json.dumps(citation_ids) if citation_ids else None,
-             tool_calls, model, tokens_used, _now()),
+            (
+                mid,
+                thread_id,
+                role,
+                content,
+                selection_event_id,
+                json.dumps(citation_ids) if citation_ids else None,
+                tool_calls,
+                model,
+                tokens_used,
+                _now(),
+            ),
         )
     return mid
 
@@ -585,12 +684,19 @@ def insert_selection_event(
                 shape_id, run_indices, selected_text, bbox_json,
                 resolved_shape_ids, created_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (eid, project_id, session_id, selection_type, slide_id,
-             shape_id,
-             json.dumps(run_indices) if run_indices else None,
-             selected_text, bbox_json,
-             json.dumps(resolved_shape_ids) if resolved_shape_ids else None,
-             _now()),
+            (
+                eid,
+                project_id,
+                session_id,
+                selection_type,
+                slide_id,
+                shape_id,
+                json.dumps(run_indices) if run_indices else None,
+                selected_text,
+                bbox_json,
+                json.dumps(resolved_shape_ids) if resolved_shape_ids else None,
+                _now(),
+            ),
         )
     return eid
 
@@ -607,7 +713,13 @@ def get_project_stats(project_id: str) -> dict:
                GROUP BY status""",
             (project_id,),
         ).fetchall()
-        stats = {"confirmed": 0, "pending": 0, "rejected": 0, "needs_review": 0, "total": 0}
+        stats = {
+            "confirmed": 0,
+            "pending": 0,
+            "rejected": 0,
+            "needs_review": 0,
+            "total": 0,
+        }
         for r in rows:
             stats[r["status"]] = r["cnt"]
             stats["total"] += r["cnt"]
