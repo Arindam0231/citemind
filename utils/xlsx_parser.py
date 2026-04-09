@@ -3,6 +3,7 @@ XLSX Parser — extracts all sheets into structured dicts.
 """
 
 import base64
+import json
 import io
 from openpyxl import load_workbook
 import pandas as pd
@@ -67,44 +68,21 @@ def format_sheets_for_prompt(sheets: dict) -> str:
                 for c_in, c_name in enumerate(sheet_details["headers"])
             }
         )
-        # TODO get llm insights and ingestion report for sheet and include in context
-        # print(get_excel_sheet_data(sheet_details["id"]))
+
         complete_data[sheet_name] = dataFrame
         Context_Complete[sheet_name] = {
-            "data": dataFrame,
+            # "data": dataFrame,
             "profile": ds.profile_dataframe(dataFrame),
             "column_types": ds.detect_column_types(dataFrame),
-            "categorical_insights": ds.gather_categorical_insights(
-                dataFrame, ds.detect_column_types(dataFrame)
+            # "categorical_insights": ds.gather_categorical_insights(
+            #     dataFrame, ds.detect_column_types(dataFrame)
+            # ),
+            "llm_insights": get_excel_sheet_data(sheet_details["id"]).get(
+                "llm_insights", {}
             ),
         }
-    lines = []
-    for sheet_name, df in complete_data.items():
-        lines.append(f'=== Sheet: "{sheet_name}" ===')
-        if df is None or df.empty:
-            lines.append("(empty sheet)")
-            lines.append("")
-            continue
-
-        headers = df.columns.tolist()
-        num_cols = len(headers)
-        col_letters = [_col_letter(i) for i in range(num_cols)]
-
-        # Header row with column letters
-        header_line = "     " + " | ".join(
-            f"Col {cl}: {h}" for cl, h in zip(col_letters, headers)
-        )
-        lines.append(header_line)
-        lines.append("     " + "-" * 60)
-
-        # Data rows (spreadsheet row index = df index + 2, accounting for header)
-        for row_idx, row in enumerate(df.itertuples(index=False), start=2):
-            cells = " | ".join(str(v) for v in row)
-            lines.append(f"Row {row_idx:>3}: {cells}")
-
-        lines.append("")
-
-    return "\n".join(lines)
+    print("Context_Complete:", Context_Complete)
+    return json.dumps(Context_Complete)
 
 
 def _col_letter(index: int) -> str:

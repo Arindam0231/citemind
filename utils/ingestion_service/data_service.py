@@ -116,9 +116,9 @@ class DataIngestionService:
         for col in df.columns:
             profile["columns"][col] = {
                 "dtype": str(df[col].dtype),
-                "unique_count": df[col].nunique(),
-                "missing_count": df[col].isna().sum(),
-                "missing_percentage": (df[col].isna().sum() / len(df)) * 100,
+                "unique_count": int(df[col].nunique()),
+                "missing_count": int(df[col].isna().sum()),
+                "missing_percentage": float((df[col].isna().sum() / len(df)) * 100),
             }
 
             # Add statistics for numeric columns

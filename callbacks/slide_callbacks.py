@@ -207,8 +207,8 @@ def register_slide_callbacks(app):
                         header_row=sdata["header_row"],
                         headers_json=json.dumps(sdata["headers"]),
                         is_cleaned=is_clean,
-                        #     ingestion_report=ingestion_report.get(sname, {}),
-                        #     llm_insights=llm_insights.get(sname, {}),
+                        ingestion_report=json.dumps(ingestion_report.get(sname, {})),
+                        llm_insights=json.dumps(llm_insights.get(sname, {})),
                     )
                     sdata["id"] = sid
                     if sdata["cells"]:

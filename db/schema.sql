@@ -81,7 +81,9 @@ CREATE TABLE IF NOT EXISTS excel_sheets (
     col_count    INTEGER NOT NULL DEFAULT 0,
     header_row   INTEGER,
     headers_json TEXT,  -- JSON array
-    is_cleaned   INTEGER NOT NULL DEFAULT 1
+    is_cleaned   INTEGER NOT NULL DEFAULT 1,
+    ingestion_report TEXT NOT NULL, -- JSON 
+    llm_insights TEXT NOT NULL -- JSON
 );
 
 -- excel_cells: atomic unit of Excel data

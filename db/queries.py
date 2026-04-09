@@ -1,6 +1,7 @@
 """
 CiteMind — Named SQL query functions for all CRUD operations.
 """
+
 from __future__ import annotations
 
 import json
@@ -287,14 +288,16 @@ def insert_excel_sheet(
     header_row: Optional[int] = None,
     headers_json: Optional[str] = None,
     is_cleaned: bool = True,
+    ingestion_report: Optional[str] = None,
+    llm_insights: Optional[str] = None,
 ) -> str:
     sid = _uuid()
     with get_db() as db:
         db.execute(
             """INSERT INTO excel_sheets
                (id, xlsx_file_id, sheet_name, sheet_index,
-                row_count, col_count, header_row, headers_json, is_cleaned)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                row_count, col_count, header_row, headers_json, is_cleaned, ingestion_report, llm_insights)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 sid,
                 xlsx_file_id,
@@ -305,6 +308,8 @@ def insert_excel_sheet(
                 header_row,
                 headers_json,
                 int(is_cleaned),
+                ingestion_report,
+                llm_insights,
             ),
         )
     return sid

@@ -1,5 +1,5 @@
 from utils.ingestion_service.datetime_util import process_datetimes
-from agent.llm_utils import llm_exec_with_retry, is_safe_code
+from agent.llm_utils import llm_exec_with_retry, is_safe_code, llm_service
 from langchain_core.messages import HumanMessage, SystemMessage
 import json
 import pandas as pd
@@ -305,6 +305,37 @@ Return ONLY a valid JSON object, no explanation, no markdown, no code fences:
     return df, report
 
 
+def report_explinations_to_user(report: dict) -> None:
+    explain_messages = [
+        HumanMessage(
+            content=f"""You are a data engineering assistant explaining a data cleaning report to a non-technical user.
+
+    Here is the transformation report from the data cleaning pipeline:
+    {json.dumps(report, indent=2)}
+
+    Write a clear, concise summary (3-5 sentences) explaining:
+    - What columns were cleaned and how
+    - Whether LLM fallback was needed and for which columns
+    - Any columns that failed entirely and why
+    - Overall data quality improvement
+
+    Be friendly and non-technical. No bullet points, just plain prose.
+
+    Return ONLY valid JSON, no markdown, no code fences:
+    {{
+        "explanation": "your plain prose explanation here"
+    }}"""
+        )
+    ]
+
+    try:
+        raw = llm_service(explain_messages)
+        report_summary = raw.get("explanation", "")
+    except Exception as e:
+        report_summary = f"Could not generate explanation: {str(e)}"
+    return report_summary
+
+
 def standard_data_pipeline(df: pd.DataFrame) -> pd.DataFrame:
     standard_data_report = {}
     # Step 1: Handle hierarchical columns
@@ -338,8 +369,12 @@ def standard_data_pipeline(df: pd.DataFrame) -> pd.DataFrame:
     if isinstance(df, pd.DataFrame) and not df.empty:
         logger.debug("Datetime columns processed successfully.")
 
+    standard_data_report["Overall Summary"] = report_explinations_to_user(
+        standard_data_report
+    )
     # TODO create comparison of two dataframes.
-    # TODO to explain report using LLM to user as a message
     # TODO Convert standard data pipeline into an AI Agent, with all these tools
 
-    return df, standard_data_report
+    return df, standard_data_report.get(
+        "Overall Summary", "No summary for transformations available."
+    )
