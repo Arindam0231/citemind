@@ -3,9 +3,12 @@ XLSX Parser — extracts all sheets into structured dicts.
 """
 
 import base64
+import json
 import io
 from openpyxl import load_workbook
 import pandas as pd
+from utils.ingestion_service.data_service import DataIngestionService
+from db.queries import get_excel_sheet_data
 
 
 def parse_xlsx(contents_b64: str) -> dict:
@@ -40,13 +43,15 @@ def parse_xlsx(contents_b64: str) -> dict:
 
 
 def format_sheets_for_prompt(sheets: dict) -> str:
+    ds = DataIngestionService()
     """
     Format parsed Excel sheets into a readable string for LLM context.
     Includes sheet name headers, column letters, and row numbers.
     """
     if not sheets:
         return "(No Excel data loaded)"
-
+    complete_data = {}
+    Context_Complete = {}
     for sheet_name, sheet_details in sheets.items():
         columns = {}
         for cell in sheet_details["cells"]:
@@ -64,35 +69,20 @@ def format_sheets_for_prompt(sheets: dict) -> str:
             }
         )
 
-        print(dataFrame.to_string())
-    lines = []
-    for sheet_name, rows in sheets.items():
-        lines.append(f'=== Sheet: "{sheet_name}" ===')
-        if not rows:
-            lines.append("(empty sheet)")
-            lines.append("")
-            continue
-
-        # First row = headers
-        headers = rows[0]
-        num_cols = len(headers)
-        col_letters = [_col_letter(i) for i in range(num_cols)]
-
-        # Header row with column letters
-        header_line = "     " + " | ".join(
-            f"Col {cl}: {h}" for cl, h in zip(col_letters, headers)
-        )
-        lines.append(header_line)
-        lines.append("     " + "-" * 60)
-
-        # Data rows (1-indexed from row 2 in spreadsheet, but row 1 in our list is header)
-        for row_idx, row in enumerate(rows[1:], start=2):
-            cells = " | ".join(str(v) for v in row)
-            lines.append(f"Row {row_idx:>3}: {cells}")
-
-        lines.append("")
-
-    return "\n".join(lines)
+        complete_data[sheet_name] = dataFrame
+        Context_Complete[sheet_name] = {
+            # "data": dataFrame,
+            "profile": ds.profile_dataframe(dataFrame),
+            "column_types": ds.detect_column_types(dataFrame),
+            # "categorical_insights": ds.gather_categorical_insights(
+            #     dataFrame, ds.detect_column_types(dataFrame)
+            # ),
+            "llm_insights": get_excel_sheet_data(sheet_details["id"]).get(
+                "llm_insights", {}
+            ),
+        }
+    print("Context_Complete:", Context_Complete)
+    return json.dumps(Context_Complete)
 
 
 def _col_letter(index: int) -> str:

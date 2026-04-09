@@ -182,7 +182,8 @@ def register_slide_callbacks(app):
 
             # Not cached, parse normally
             parsed = parse_workbook(contents, filename)
-
+            llm_insights = parsed.get("llm_insights", {})
+            ingestion_report = parsed.get("ingestion_report", {})
             fid = insert_xlsx_file(
                 original_name=filename,
                 storage_path=parsed.get("processed_path", ""),
@@ -206,7 +207,10 @@ def register_slide_callbacks(app):
                         header_row=sdata["header_row"],
                         headers_json=json.dumps(sdata["headers"]),
                         is_cleaned=is_clean,
+                        ingestion_report=json.dumps(ingestion_report.get(sname, {})),
+                        llm_insights=json.dumps(llm_insights.get(sname, {})),
                     )
+                    sdata["id"] = sid
                     if sdata["cells"]:
                         bulk_cells = []
                         for c in sdata["cells"]:
@@ -216,7 +220,7 @@ def register_slide_callbacks(app):
                     sheets_raw[cat][sname] = sdata
 
             mark_xlsx_parsed(fid)
-            ingestion_report = parsed.get("ingestion_report", {})
+
             chat_history.append(
                 {
                     "role": "system",
