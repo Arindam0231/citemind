@@ -12,6 +12,8 @@ Upload a `.pptx` and an `.xlsx`. CiteMind renders each slide in the browser usin
 
 ## Architecture
 
+> **Note**: Every subdirectory within `citemind/` contains its own dedicated `readme.md` elaborating deeply on its contents. Check `/agent/readme.md` for a comprehensive breakdown of the LangGraph AI loop!
+
 ```
 citemind/
 ├── app.py                  # Dash app + layout entry point

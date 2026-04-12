@@ -154,7 +154,8 @@ Respond ONLY with valid JSON in the following format:
   "row_ref": "[Sheet: '...'] Row N",
   "match_strength": "High|Medium|Low",
   "reason": "Explain why this might be the intended data",
-  "suggestion": "How the claim should be updated to match the data"
+  "suggestion": "How the claim should be updated to match the data",
+  "needs_transformation": false // true if the value requires manual aggregation or a math formula (e.g. sums)
 }}]
 If no related data exists at all, return an empty list: []
 """

@@ -217,11 +217,42 @@ def find_relation(state: dict) -> dict:
 
     try:
         parsed = _extract_json(reply)
+        
+        needs_transform = False
+        if parsed and isinstance(parsed, list) and len(parsed) > 0:
+            needs_transform = parsed[0].get("needs_transformation", False)
+            
+        payload_type = "transformation_request" if needs_transform else "relation_verification"
+
+        if needs_transform:
+            try:
+                from .llm_utils import llm_exec_with_retry
+                from langchain_core.messages import SystemMessage, HumanMessage
+                
+                messages = [
+                    SystemMessage(content="You are a python coding assistant. Write a python function `def extract_value(sheets):` that extracts or calculates the required value from the `sheets` dictionary using the provided reasoning and hints. The `sheets` dictionary maps sheet names to 2D lists (rows and columns). Return JSON with 'response' containing ONLY the python code."),
+                    HumanMessage(content=f"Claim: {last_gap}\nReason: {parsed[0].get('reason')}\nHint cell: {parsed[0].get('row_ref')} (and surrounding rows if aggregating).")
+                ]
+                
+                exec_result = llm_exec_with_retry(
+                    fn_name="extract_value",
+                    messages=messages,
+                    fn_kwargs={"sheets": state.get("active_sheets") or state.get("sheets", {})},
+                )
+                
+                parsed[0]["formula"] = exec_result["response"].get("response", "")
+                parsed[0]["computed_value"] = exec_result["result"]
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error("Failed to generate transformation code: %s", e)
+                parsed[0]["formula"] = "# Failed to generate code. Please write it manually.\ndef extract_value(sheets):\n    result = None\n    return result\n"
+                parsed[0]["computed_value"] = "Error"
+
         return {
             "candidate_citations": parsed,
             "pending_hil_approval": True,
             "hil_payload": {
-                "type": "relation_verification",
+                "type": payload_type,
                 "claim": last_gap,
                 "candidates": parsed,
             },
@@ -252,6 +283,38 @@ def hil_verify(state: dict) -> dict:
                     "content": "You rejected the proposed relation mapping. Flagging as unsolved gap.",
                 }
             )
+        elif user_decision.get("action") == "transform":
+            code = user_decision.get("code", "")
+            sheets = state.get("active_sheets") or state.get("sheets", {})
+            local_vars = {"sheets": sheets}
+            try:
+                exec(code, local_vars, local_vars)
+                
+                if "extract_value" in local_vars and callable(local_vars["extract_value"]):
+                    result_val = local_vars["extract_value"](sheets=sheets)
+                else:
+                    result_val = local_vars.get("result", "Undefined")
+                
+                candidate_citations = state.get("candidate_citations", [])
+                if candidate_citations and isinstance(candidate_citations, list):
+                    candidate_citations[0]["formula"] = code
+                    candidate_citations[0]["computed_value"] = result_val
+                
+                messages_update.append(
+                    {
+                        "role": "assistant",
+                        "content": f"Transformation evaluated successfully. Extracted value: {result_val}. Validation successful.",
+                    }
+                )
+            except Exception as e:
+                import traceback
+                error_msg = str(e)
+                messages_update.append(
+                    {
+                        "role": "assistant",
+                        "content": f"Transformation Code Execution Failed: {error_msg}",
+                    }
+                )
 
     return {
         "pending_hil_approval": False,

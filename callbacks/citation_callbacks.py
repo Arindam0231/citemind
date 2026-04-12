@@ -70,6 +70,44 @@ def register_citation_callbacks(app):
                 ], className="citation-actions")
             ], className="hil-verification-card", style={"border": "1px solid #3b82f6", "padding": "10px", "borderRadius": "8px", "marginBottom": "15px"})
             
+        elif payload_type == "transformation_request":
+            claim = payload.get("claim", "")
+            candidates = payload.get("candidates", [])
+            match = candidates[0] if candidates else {}
+            
+            formula = match.get("formula")
+            computed_value = match.get("computed_value", "None")
+            
+            if not formula:
+                formula = "# The `sheets` dictionary is available in scope.\n# It maps sheet names to 2D lists.\n# Compute the extracted value and save it in a variable named `result`.\nresult = "
+            
+            return html.Div([
+                html.Div("🔧 Transformation Required", className="hil-card-header", style={"fontWeight": "bold", "color": "#8b5cf6"}),
+                html.Div([
+                    html.Strong("Slide claim: "), html.Span(claim)
+                ], className="hil-card-row", style={"marginBottom": "5px"}),
+                html.Div([
+                    html.Strong("Sheet match hints: "), html.Span(match.get("row_ref", "Unknown"))
+                ], className="hil-card-row", style={"marginBottom": "5px"}),
+                html.Div([
+                    html.Strong("Reason: "), html.Span(match.get("reason", "Unknown"))
+                ], className="hil-card-row", style={"marginBottom": "5px"}),
+                html.Div([
+                    html.Strong("AI Computed Value: "), html.Span(str(computed_value), style={"color": "#10b981", "fontWeight": "bold"})
+                ], className="hil-card-row", style={"marginBottom": "5px"}),
+                html.Div([
+                    dcc.Textarea(
+                        id="hil-transform-code",
+                        value=formula,
+                        style={"width": "100%", "height": "120px", "marginTop": "10px", "fontFamily": "monospace", "padding": "8px", "borderRadius": "4px"}
+                    )
+                ], className="hil-card-row"),
+                html.Div([
+                    html.Button("⚡ Evaluate & Proceed", id="hil-transform-btn", className="ghost-btn ghost-btn-confirm", n_clicks=0),
+                    html.Button("✗ Reject", id="hil-reject-btn", className="ghost-btn ghost-btn-reject", n_clicks=0),
+                ], className="citation-actions", style={"marginTop": "10px"})
+            ], className="hil-verification-card", style={"border": "1px solid #8b5cf6", "padding": "10px", "borderRadius": "8px", "marginBottom": "15px"})
+
         return None
 
     # ─────────────────────────────────────────────────────────
