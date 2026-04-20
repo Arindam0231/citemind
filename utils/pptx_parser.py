@@ -48,11 +48,12 @@ def format_slides_for_prompt(slides: list[dict]) -> str:
     if not slides:
         return "(No slides loaded)"
     shapes = []
+    lines = []
     for slide_shapes in slides:
         shapes.extend(slides[slide_shapes])
-    lines = []
-    for s in shapes:
-        lines.append(f"--- Slide {s['slide_id']} ---")
-        lines.append(s["full_text"] if s["full_text"] else "(empty slide)")
-        lines.append("")
+        lines.append(f"--- Slide {slide_shapes} ---")
+        for s in shapes:
+            lines.append(s["full_text"] if s["full_text"] else "")
+            lines.append("")
+
     return "\n".join(lines)
