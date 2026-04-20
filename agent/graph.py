@@ -19,7 +19,9 @@ from .nodes import (
     find_relation,
     hil_context,
     hil_verify,
+    find_facts,
 )
+from .agent_logger import clear_log, log_graph_invocation, log_graph_completion
 
 
 # ── State Schema ────────────────────────────────────────
@@ -49,6 +51,9 @@ class CitationState(TypedDict):
     pending_hil_approval: bool
     hil_payload: dict
     loop_count: int
+
+    max_iterations: int  # Optional: to prevent infinite loops, can be set in config
+    iteration_count: int  # Track the number of iterations
 
 
 # ── Graph Construction ──────────────────────────────────
@@ -98,7 +103,7 @@ def build_graph() -> StateGraph:
     graph.add_node("flag_gaps", flag_gaps)
     graph.add_node("find_relation", find_relation)
     graph.add_node("hil_verify", hil_verify)
-
+    graph.add_node("find_facts", find_facts)
     # Entry point
     graph.set_entry_point("resolve_mentions")
 
@@ -112,6 +117,7 @@ def build_graph() -> StateGraph:
             "verify": "verify_consistency",
             "format": "format_citation",
             "flag": "flag_gaps",
+            "find_facts": "find_facts",
             "END": END,
         },
     )
@@ -166,9 +172,16 @@ class CiteMindGraph:
 
     def invoke(self, state: dict, config: dict | None = None):
         """Pass-through to the underlying compiled graph's invoke."""
+        clear_log()  # Clear log file before each invocation
+        log_graph_invocation(state)
+
         if config is not None:
-            return self._compiled.invoke(state, config)
-        return self._compiled.invoke(state)
+            result = self._compiled.invoke(state, config)
+        else:
+            result = self._compiled.invoke(state)
+
+        log_graph_completion(result)
+        return result
 
     def run_agent(
         self,
