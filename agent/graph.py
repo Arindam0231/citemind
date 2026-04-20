@@ -148,7 +148,7 @@ def build_graph() -> StateGraph:
     # Relation finding and verification
     graph.add_edge("find_relation", "hil_verify")
     graph.add_edge("hil_verify", END)
-
+    graph.add_edge("find_facts", "suggest_citations")
     # Direct to END
     graph.add_edge("suggest_citations", END)
     graph.add_edge("format_citation", END)
