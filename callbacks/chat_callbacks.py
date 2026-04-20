@@ -177,17 +177,28 @@ def register_chat_callbacks(app):
         Output("store-hil-payload", "data", allow_duplicate=True),
         Input("hil-accept-btn", "n_clicks"),
         Input("hil-reject-btn", "n_clicks"),
+        Input("hil-transform-btn", "n_clicks"),
+        State("hil-transform-code", "value"),
         State("store-chat-history", "data"),
         State("store-project-id", "data"),
         prevent_initial_call=True,
     )
-    def handle_hil_action(accept_clicks, reject_clicks, history, project_id):
+    def handle_hil_action(accept_clicks, reject_clicks, transform_clicks, transform_code, history, project_id):
         ctx = callback_context
         if not ctx.triggered:
             raise PreventUpdate
 
         trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
-        action = "accept" if "accept" in trigger_id else "reject"
+        
+        if "accept" in trigger_id:
+            action = "accept"
+            resume_data = {"action": action}
+        elif "transform" in trigger_id:
+            action = "transform"
+            resume_data = {"action": action, "code": transform_code or ""}
+        else:
+            action = "reject"
+            resume_data = {"action": action}
 
         cfg = {"configurable": {"thread_id": project_id or "default"}}
         graph = get_graph()
@@ -197,7 +208,7 @@ def register_chat_callbacks(app):
 
             # Resume graph with user decision
             final_state = executor.submit(
-                graph.invoke, Command(resume={"action": action}), cfg
+                graph.invoke, Command(resume=resume_data), cfg
             ).result()
 
             hil_payload = None
