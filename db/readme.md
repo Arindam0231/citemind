@@ -1,6 +1,6 @@
 # Database Directory (`db/`)
 
-This directory orchestrates local embedded persistence via SQLite (`citemind.db`).
+This directory orchestrates local embedded persistence via SQLite (`checkmate.db`).
 
 ## Setup
 SQLite acts as the state synchronization layer between user inputs, uploaded file artifacts, and the LLM execution process without needing an external service.

@@ -1,6 +1,6 @@
 # Assets
 
-This directory contains static assets for the CiteMind Dash application.
+This directory contains static assets for the Checkmate Dash application.
 
 ## Contents
 - **`style.css`**: The primary stylesheet enabling the dark-mode theme, implementing standard spacing, modern font variables, shape overlay logic for the PowerPoint rendering, responsive flex patterns, and specific component styling (e.g. Chat Bubbles, Excel strip components, citation lists).

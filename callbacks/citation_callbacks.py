@@ -1,5 +1,5 @@
 """
-CiteMind — Citation panel callbacks.
+Checkmate — Citation panel callbacks.
 Handles citation tab filtering, action buttons (confirm/reject/edit), and live updates.
 """
 from __future__ import annotations

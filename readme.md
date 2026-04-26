@@ -1,4 +1,4 @@
-# CiteMind
+# Checkmate
 
 A dark-mode Plotly Dash app for linking PowerPoint slide values to their Excel source data — no LibreOffice required.
 
@@ -6,16 +6,16 @@ A dark-mode Plotly Dash app for linking PowerPoint slide values to their Excel s
 
 ## What it does
 
-Upload a `.pptx` and an `.xlsx`. CiteMind renders each slide in the browser using pure HTML/CSS (via **python-pptx**), overlays clickable shape regions on top, and lets you map individual numeric runs on the slide to cells in the spreadsheet. An AI agent (Claude via LangGraph) can auto-suggest citations and let you confirm, reject, or edit them in the citation panel.
+Upload a `.pptx` and an `.xlsx`. Checkmate renders each slide in the browser using pure HTML/CSS (via **python-pptx**), overlays clickable shape regions on top, and lets you map individual numeric runs on the slide to cells in the spreadsheet. An AI agent (Claude via LangGraph) can auto-suggest citations and let you confirm, reject, or edit them in the citation panel.
 
 ---
 
 ## Architecture
 
-> **Note**: Every subdirectory within `citemind/` contains its own dedicated `readme.md` elaborating deeply on its contents. Check `/agent/readme.md` for a comprehensive breakdown of the LangGraph AI loop!
+> **Note**: Every subdirectory within `checkmate/` contains its own dedicated `readme.md` elaborating deeply on its contents. Check `/agent/readme.md` for a comprehensive breakdown of the LangGraph AI loop!
 
 ```
-citemind/
+checkmate/
 ├── app.py                  # Dash app + layout entry point
 ├── layout.py               # Full layout builder
 │
@@ -92,7 +92,7 @@ python app.py          # opens at http://localhost:8080
 
 ## Database
 
-SQLite (`citemind.db`) with the following main tables:
+SQLite (`checkmate.db`) with the following main tables:
 
 - **`pptx_files`** / **`slides`** / **`shapes`** — parsed presentation data
 - **`xlsx_files`** / **`excel_sheets`** / **`excel_cells`** — parsed spreadsheet data

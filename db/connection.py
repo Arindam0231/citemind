@@ -1,5 +1,5 @@
 """
-CiteMind — SQLite database connection manager.
+Checkmate — SQLite database connection manager.
 """
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import sqlite3
 from contextlib import contextmanager
 from typing import Generator
 
-_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "citemind.db")
+_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "checkmate.db")
 _SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "schema.sql")
 _initialized = False
 

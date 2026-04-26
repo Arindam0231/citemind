@@ -1,5 +1,5 @@
 """
-CiteMind — Excel parser with cell-level extraction.
+Checkmate — Excel parser with cell-level extraction.
 Each cell stored with row_context for AI disambiguation.
 """
 
@@ -189,7 +189,7 @@ def parse_workbook(
     original_sheets = _extract_sheets_from_wb(wb)
     cleaned_sheets = _extract_sheets_from_wb(ingested_wb)
     # Add custom identifier to the workbook metadata
-    ingested_wb.properties.identifier = f"citemind_{sha}"
+    ingested_wb.properties.identifier = f"checkmate_{sha}"
 
     # Save the processed workbook
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

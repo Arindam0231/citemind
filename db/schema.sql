@@ -1,4 +1,4 @@
--- CiteMind Database Schema
+-- Checkmate Database Schema
 -- All tables use TEXT primary keys (uuid4) except citation_history (INTEGER rowid).
 
 -- pptx_files

@@ -1,5 +1,5 @@
 """
-CiteMind — Chat panel callbacks.
+Checkmate — Chat panel callbacks.
 UI side only. Hooks form inputs into generating AI responses via LangGraph.
 """
 

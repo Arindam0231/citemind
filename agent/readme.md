@@ -1,6 +1,6 @@
-# CiteMind Agent Architecture
+# Checkmate Agent Architecture
 
-This directory houses the intelligence layer of the application. The CiteMind agent is orchestrated via **LangGraph**, providing a predictable state machine for AI interactions that handles context isolation, deterministic routing, explicit validations, and Human-in-The-Loop (HIL) checkpoints.
+This directory houses the intelligence layer of the application. The Checkmate agent is orchestrated via **LangGraph**, providing a predictable state machine for AI interactions that handles context isolation, deterministic routing, explicit validations, and Human-in-The-Loop (HIL) checkpoints.
 
 ## Core Components
 - **`graph.py`**: Defines the LangGraph state schema (`CitationState`), node topology, conditional edges, and handles app-level singleton caching.

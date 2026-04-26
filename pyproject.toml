@@ -1,5 +1,5 @@
 [project]
-name = "citemind"
+name = "checkmate"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -11,6 +11,7 @@ dependencies = [
     "langchain-anthropic>=0.1.15",
     "langchain-core>=0.2.0",
     "langgraph>=0.2.0",
+    "ollama>=0.6.1",
     "openpyxl>=3.1.2",
     "pandas>=2.2.0",
     "plotly>=5.22.0",

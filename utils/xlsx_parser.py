@@ -50,39 +50,39 @@ def format_sheets_for_prompt(sheets: dict) -> str:
     """
     if not sheets:
         return "(No Excel data loaded)"
-    complete_data = {}
     Context_Complete = {}
+    data = get_dataFrame_from_sheet_details(sheets)
+    for sheet_name, sheet_details in sheets.items():
+        Context_Complete[sheet_name] = {
+            # "data": data[sheet_name],
+            "profile": ds.profile_dataframe(data[sheet_name]),
+            "column_types": ds.detect_column_types(data[sheet_name]),
+            # "categorical_insights": ds.gather_categorical_insights(
+            #     data[sheet_name], ds.detect_column_types(data[sheet_name])
+            # ),
+            "llm_insights": get_excel_sheet_data(sheet_details["id"]).get(
+                "llm_insights", {}
+            ),
+        }
+    return json.dumps(Context_Complete)
+
+
+def get_dataFrame_from_sheet_details(sheets: dict) -> pd.DataFrame:
+    data = {}
     for sheet_name, sheet_details in sheets.items():
         columns = {}
         for cell in sheet_details["cells"]:
             if not cell["is_header"]:
                 columns[cell["col_index"]] = columns.get(cell["col_index"], [])
                 columns[cell["col_index"]].append(cell["display_value"])
-        for c_in, c_val in columns.items():
-            print(c_in, len(c_val))
-        for c_in, c_name in enumerate(sheet_details["headers"]):
-            print(c_in, len(columns.get(c_in, [])), c_name)
         dataFrame = pd.DataFrame(
             {
                 c_name: columns.get(c_in, [])
                 for c_in, c_name in enumerate(sheet_details["headers"])
             }
         )
-
-        complete_data[sheet_name] = dataFrame
-        Context_Complete[sheet_name] = {
-            # "data": dataFrame,
-            "profile": ds.profile_dataframe(dataFrame),
-            "column_types": ds.detect_column_types(dataFrame),
-            # "categorical_insights": ds.gather_categorical_insights(
-            #     dataFrame, ds.detect_column_types(dataFrame)
-            # ),
-            "llm_insights": get_excel_sheet_data(sheet_details["id"]).get(
-                "llm_insights", {}
-            ),
-        }
-    print("Context_Complete:", Context_Complete)
-    return json.dumps(Context_Complete)
+        data[sheet_name] = dataFrame
+    return data
 
 
 def _col_letter(index: int) -> str:

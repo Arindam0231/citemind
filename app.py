@@ -1,5 +1,5 @@
 """
-CiteMind — Dash application entry point.
+Checkmate — Dash application entry point.
 4-zone layout: Header, Slide Panel, Citations Panel, Chat Panel.
 """
 
@@ -23,8 +23,8 @@ app = dash.Dash(
         {"src": "https://cdn.tailwindcss.com"},
     ],
     suppress_callback_exceptions=True,
-    title="CiteMind",
-    update_title="CiteMind · thinking...",
+    title="Checkmate",
+    update_title="Checkmate · thinking...",
 )
 
 
@@ -43,7 +43,7 @@ def _upload_zone(file_type: str) -> html.Div:
 
 
 def build_layout() -> html.Div:
-    """Build the complete CiteMind layout."""
+    """Build the complete Checkmate layout."""
     return html.Div(
         [
             # ── Hidden Stores ──────────────────────────────
@@ -75,9 +75,11 @@ def build_layout() -> html.Div:
                     html.Div(
                         [
                             html.Div("C", className="logo-icon"),
-                            html.Span("CiteMind", className="logo-text"),
+                            html.Span("Checkmate", className="logo-text"),
                         ],
+                        id="theme-toggle",
                         className="logo-group",
+                        style={"cursor": "pointer"},
                     ),
                     html.Div(
                         [
@@ -121,7 +123,7 @@ def build_layout() -> html.Div:
             # ── Upload Landing ──────────────────────────────
             html.Div(
                 [
-                    html.Div("CiteMind", className="upload-title"),
+                    html.Div("Checkmate", className="upload-title"),
                     html.Div(
                         "Upload your PowerPoint and Excel files to begin "
                         "linking citations between slides and data.",
@@ -183,6 +185,22 @@ register_slide_callbacks(app)
 register_citation_callbacks(app)
 register_chat_callbacks(app)
 register_selection_callbacks(app)
+
+app.clientside_callback(
+    """
+    function(n_clicks) {
+        if (!n_clicks) return window.dash_clientside.no_update;
+        const root = document.documentElement;
+        const currentTheme = root.getAttribute('data-theme') || 'light';
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        root.setAttribute('data-theme', newTheme);
+        return window.dash_clientside.no_update;
+    }
+    """,
+    dash.Output("theme-toggle", "id"),
+    dash.Input("theme-toggle", "n_clicks"),
+    prevent_initial_call=True
+)
 
 
 server = app.server

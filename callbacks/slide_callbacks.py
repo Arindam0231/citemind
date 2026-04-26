@@ -1,5 +1,5 @@
 """
-CiteMind — Slide and App callbacks.
+Checkmate — Slide and App callbacks.
 Handles file upload, slide navigation, and rendering shape overlays.
 """
 
@@ -149,8 +149,8 @@ def register_slide_callbacks(app):
                 temp_wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True)
                 prop_id = temp_wb.properties.identifier
                 temp_wb.close()
-                if prop_id and str(prop_id).startswith("citemind_"):
-                    search_sha = str(prop_id).split("citemind_")[1]
+                if prop_id and str(prop_id).startswith("checkmate_"):
+                    search_sha = str(prop_id).split("checkmate_")[1]
             except Exception:
                 pass
 
@@ -291,7 +291,7 @@ def register_slide_callbacks(app):
     )
     def initialize_project(pptx_fid, xlsx_fid):
         if pptx_fid and xlsx_fid:
-            pid = create_project("CiteMind Project", pptx_fid, xlsx_fid)
+            pid = create_project("Checkmate Project", pptx_fid, xlsx_fid)
             slides = get_slides_for_pptx(pptx_fid)
             slide_ids = [s["id"] for s in slides]
             return {"display": "none"}, {"display": "grid"}, pid, slide_ids

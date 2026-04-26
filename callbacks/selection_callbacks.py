@@ -1,5 +1,5 @@
 """
-CiteMind — Selection callbacks.
+Checkmate — Selection callbacks.
 3 Modes: Shape Click, Text Selection, Canvas Drag.
 """
 from __future__ import annotations
@@ -85,7 +85,7 @@ def register_selection_callbacks(app):
                         run_indices: hitRuns,
                         bbox: null
                     };
-                    document.dispatchEvent(new CustomEvent('citemind:selection'));
+                    document.dispatchEvent(new CustomEvent('checkmate:selection'));
                 }
             });
             return window.dash_clientside.no_update;
@@ -159,7 +159,7 @@ def register_selection_callbacks(app):
                     const storeEl = document.getElementById('store-drag');
                     if (storeEl) {
                         window.dash_clientside_drag_update = { bbox: bbox };
-                        document.dispatchEvent(new CustomEvent('citemind:drag'));
+                        document.dispatchEvent(new CustomEvent('checkmate:drag'));
                     }
                 }
             });

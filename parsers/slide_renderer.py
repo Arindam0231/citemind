@@ -1,5 +1,5 @@
 """
-CiteMind — HTML/CSS slide renderer.
+Checkmate — HTML/CSS slide renderer.
 
 Converts a single PPTX slide to a self-contained HTML string using python-pptx.
 Each shape is rendered as an absolutely-positioned div with background/border/text

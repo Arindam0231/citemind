@@ -1,5 +1,5 @@
 """
-CiteMind — Dash layout builder (Antigravity theme).
+Checkmate — Dash layout builder (Antigravity theme).
 """
 from dash import html, dcc
 
@@ -30,7 +30,7 @@ def _upload_zone(file_type: str) -> html.Div:
 
 
 def build_layout() -> html.Div:
-    """Construct the full CiteMind Antigravity layout."""
+    """Construct the full Checkmate Antigravity layout."""
     return html.Div(
         [
             # ── Hidden stores ────────────────────────────
@@ -49,7 +49,7 @@ def build_layout() -> html.Div:
                     html.Div(
                         [
                             html.Div("C", className="logo-icon"),
-                            html.Span("CiteMind", className="logo-text"),
+                            html.Span("Checkmate", className="logo-text"),
                         ],
                         className="logo-group",
                     ),
@@ -158,7 +158,7 @@ def build_layout() -> html.Div:
                                     html.Div(
                                         [
                                             html.Div("🔬", className="chat-welcome-icon"),
-                                            html.H3("Welcome to CiteMind"),
+                                            html.H3("Welcome to Checkmate"),
                                             html.P(
                                                 "Upload your PowerPoint and Excel files, "
                                                 "then ask me to find citations, verify numbers, "

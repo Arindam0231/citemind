@@ -1,5 +1,5 @@
 """
-CiteMind Agent — LangGraph StateGraph definition.
+Checkmate Agent — LangGraph StateGraph definition.
 """
 
 from typing import TypedDict, List, Annotated
@@ -11,6 +11,8 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from .nodes import (
     resolve_mentions,
+    planner,
+    code_executor,
     route_query,
     suggest_citations,
     verify_consistency,
@@ -43,9 +45,13 @@ class CitationState(TypedDict):
     current_query: str
 
     # Agent working memory
+    plan: dict
+    current_step_id: str
+    step_outputs: dict
     candidate_citations: List[dict]
     gaps_found: List[str]
-    last_agent_action: str  # "suggest" | "verify" | "format" | "flag"
+    last_agent_action: str  # "suggest" | "verify" | "format" | "flag" | "code_executor"
+    action_history: List[dict]  # List of { "action": str, "outcome": str }
 
     # Human-in-the-Loop & Safety
     pending_hil_approval: bool
@@ -59,100 +65,69 @@ class CitationState(TypedDict):
 # ── Graph Construction ──────────────────────────────────
 
 
-def _resolve_mentions_router(state: dict) -> str:
-    """Route after resolving mentions. Ask for HIL if unsure, else route query."""
-    if state.get("loop_count", 0) > 3:
-        return "END"
-
-    if state.get("pending_hil_approval", False):
-        return "hil_context"
-
-    route = route_query(state)
-    return route
-
-
-def _route_after_context(state: dict) -> str:
-    if state.get("loop_count", 0) > 3:
-        return "END"
-    return route_query(state)
-
-
-def _verify_router(state: dict) -> str:
-    """Route after verifying. Go to find_relation if gaps found."""
-    if state.get("loop_count", 0) > 3:
-        return "END"
-
-    if state.get("gaps_found"):
-        return "find_relation"
-
-    return "END"
-
-
 def build_graph() -> StateGraph:
     """
-    Build and compile the CiteMind LangGraph.
+    Build and compile the Checkmate LangGraph.
     """
     graph = StateGraph(CitationState)
 
     # Add nodes
     graph.add_node("resolve_mentions", resolve_mentions)
-    graph.add_node("hil_context", hil_context)
+    graph.add_node("planner", planner)
+    graph.add_node("code_executor", code_executor)
     graph.add_node("suggest_citations", suggest_citations)
     graph.add_node("verify_consistency", verify_consistency)
     graph.add_node("format_citation", format_citation)
     graph.add_node("flag_gaps", flag_gaps)
     graph.add_node("find_relation", find_relation)
-    graph.add_node("hil_verify", hil_verify)
     graph.add_node("find_facts", find_facts)
-    # Entry point
+    graph.add_node("hil_context", hil_context)
+    graph.add_node("hil_verify", hil_verify)
+
+    # Entry point: resolve mentions first to scope the context
     graph.set_entry_point("resolve_mentions")
 
-    # Routing from resolve_mentions
+    # From resolve_mentions, always go to planner (unless HIL needed)
     graph.add_conditional_edges(
         "resolve_mentions",
-        _resolve_mentions_router,
+        lambda s: "hil_context" if s.get("pending_hil_approval") else "find_facts",
         {
             "hil_context": "hil_context",
-            "suggest": "suggest_citations",
-            "verify": "verify_consistency",
-            "format": "format_citation",
-            "flag": "flag_gaps",
             "find_facts": "find_facts",
-            "END": END,
         },
     )
 
-    # Routing from hil_context (after human review)
-    graph.add_conditional_edges(
-        "hil_context",
-        _route_after_context,
-        {
-            "suggest": "suggest_citations",
-            "verify": "verify_consistency",
-            "format": "format_citation",
-            "flag": "flag_gaps",
-            "END": END,
-        },
-    )
+    # After HIL context, go to planner
+    graph.add_edge("hil_context", "planner")
 
-    # Verification flow
+    # Planner decides what to do next based on current step
     graph.add_conditional_edges(
-        "verify_consistency",
-        _verify_router,
+        "planner",
+        route_query,
         {
+            "suggest_citations": "suggest_citations",
+            "code_executor": "code_executor",
+            "verify_consistency": "verify_consistency",
             "find_relation": "find_relation",
+            "flag_gaps": "flag_gaps",
+            "format_citation": "format_citation",
+            "hil_context": "hil_context",
+            "hil_verify": "hil_verify",
             "END": END,
         },
     )
 
-    # Relation finding and verification
-    graph.add_edge("find_relation", "hil_verify")
-    graph.add_edge("hil_verify", END)
-    graph.add_edge("find_facts", "suggest_citations")
-    # Direct to END
-    graph.add_edge("suggest_citations", END)
-    graph.add_edge("format_citation", END)
-    graph.add_edge("flag_gaps", END)
+    # All action nodes loop back to planner
+    graph.add_edge("find_facts", "planner")
+    graph.add_edge("suggest_citations", "planner")
+    graph.add_edge("code_executor", "planner")
+    graph.add_edge("verify_consistency", "planner")
+    graph.add_edge("find_relation", "planner")
+    graph.add_edge("format_citation", "planner")
+    graph.add_edge("flag_gaps", "planner")
+
+    # HIL Verify loops back to planner after completion
+    graph.add_edge("hil_verify", "planner")
 
     return graph
 
@@ -160,7 +135,7 @@ def build_graph() -> StateGraph:
 # ── Agent class ─────────────────────────────────────────
 
 
-class CiteMindGraph:
+class CheckmateGraph:
     """
     Encapsulates the compiled LangGraph agent.
     Holds the compiled graph as an instance attribute to avoid global state.
@@ -193,7 +168,7 @@ class CiteMindGraph:
         xlsx_filename: str = "",
     ) -> dict:
         """
-        Invoke the CiteMind agent with a user query.
+        Invoke the Checkmate agent with a user query.
         """
         input_state = {
             "slides": slides or [],
@@ -210,6 +185,11 @@ class CiteMindGraph:
             "pending_hil_approval": False,
             "hil_payload": {},
             "loop_count": 0,
+            "max_iterations": 10,
+            "plan": {},
+            "current_step_id": "",
+            "step_outputs": {},
+            "action_history": [],
         }
 
         # Give a default config thread_id if invoking directly via run_agent without config
@@ -222,9 +202,9 @@ class CiteMindGraph:
 
 
 @functools.lru_cache(maxsize=1)
-def get_graph() -> CiteMindGraph:
-    """Return the cached (singleton) CiteMindGraph instance."""
-    return CiteMindGraph()
+def get_graph() -> CheckmateGraph:
+    """Return the cached (singleton) CheckmateGraph instance."""
+    return CheckmateGraph()
 
 
 # ── Public API (module-level convenience wrapper) ───────
@@ -236,5 +216,5 @@ def run_agent(
     sheets: dict,
     messages: list[dict],
 ) -> dict:
-    """Module-level convenience wrapper around CiteMindGraph.run_agent."""
+    """Module-level convenience wrapper around CheckmateGraph.run_agent."""
     return get_graph().run_agent(query, slides, sheets, messages)

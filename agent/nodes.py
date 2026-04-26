@@ -1,11 +1,12 @@
 """
-CiteMind Agent — LangGraph node functions.
+Checkmate Agent — LangGraph node functions.
 Each node receives the full CitationState and returns a partial update dict.
 """
 
 import json
 import logging
 import traceback
+import pandas as pd
 from langchain_core.messages import SystemMessage, HumanMessage
 from langgraph.types import interrupt
 
@@ -24,7 +25,7 @@ from agent.prompts import (
 )
 from agent.agent_logger import log_node_execution
 from utils.pptx_parser import format_slides_for_prompt
-from utils.xlsx_parser import format_sheets_for_prompt
+from utils.xlsx_parser import format_sheets_for_prompt, get_dataFrame_from_sheet_details
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,63 @@ def _build_system_prompt(state: dict) -> str:
         slides_context=slides_ctx,
         sheets_context=sheets_ctx,
     )
+
+
+def _get_schema_summary(state: dict) -> str:
+    """
+    Returns a string summary of the available Excel sheets:
+    Sheet names, column headers, and approximate row counts.
+    """
+
+    sheets_raw = state.get("sheets") or {}
+    sheets_dict = sheets_raw.get("cleaned", {}) if isinstance(sheets_raw, dict) else {}
+    if not sheets_dict:
+        return "No Excel sheets loaded."
+    data = get_dataFrame_from_sheet_details(sheets_dict)
+    summary = ["Available Excel Sheets:"]
+    for name, df in data.items():
+        headers = df.columns.tolist()
+        row_count = len(df) - 1
+        cols_str = ", ".join([str(h) for h in headers])
+        summary.append(f"- Sheet: {name} ({row_count} rows) | Columns: [{cols_str}]")
+
+    return "\n".join(summary)
+
+
+def _get_node_results_summary(state: dict) -> str:
+    """
+    Returns a truncated summary of previous node outputs for the planner.
+    """
+    outputs = state.get("step_outputs", {})
+    if not outputs:
+        return "No previous step results."
+
+    summary = []
+    for step_id, result in outputs.items():
+        # Truncate result if it's too long
+        res_str = str(result)
+        if len(res_str) > 300:
+            res_str = res_str[:300] + "... [truncated]"
+        summary.append(f"Step {step_id} Output: {res_str}")
+
+    return "\n".join(summary)
+
+
+def _get_action_history_summary(state: dict) -> str:
+    """
+    Formats the action_history list for the prompt.
+    """
+    history = state.get("action_history", [])
+    if not history:
+        return "No actions attempted yet."
+
+    summary = []
+    for i, item in enumerate(history):
+        summary.append(
+            f"{i+1}. Action: {item.get('action')} | Outcome: {item.get('outcome')}"
+        )
+
+    return "\n".join(summary)
 
 
 # ── Graph Nodes ─────────────────────────────────────────
@@ -138,6 +196,10 @@ def resolve_mentions(state: dict) -> dict:
             "active_slides": active_slides,
             "active_sheets": active_sheets,
             "last_agent_action": "resolve_mentions",
+            "action_history": state.get("action_history", [])
+            + [
+                {"action": "resolve_mentions", "outcome": "Resolved slides and sheets."}
+            ],
             "loop_count": state.get("loop_count", 0) + 1,
         }
 
@@ -167,34 +229,188 @@ def hil_context(state: dict) -> dict:
     payload = state.get("hil_payload", {})
     answer = interrupt(payload)
     print(answer)
-    update = {"pending_hil_approval": False, "hil_payload": {}}
+    update = {
+        "pending_hil_approval": False,
+        "hil_payload": {},
+        "action_history": state.get("action_history", [])
+        + [
+            {
+                "action": "hil_context",
+                "outcome": f"Human provided context resolution: {answer}",
+            }
+        ],
+    }
     return update
+
+
+def planner(state: dict) -> dict:
+    """
+    Autonomous planning node. Observes state and returns a structured plan.
+    """
+    _log_node_entry("planner")
+    query = state.get("current_query", "")
+    system = _build_system_prompt(state)
+    print("Holalfja")
+    # Enrich prompt with state-specific info
+    print(1)
+    schema_summary = _get_schema_summary(state)
+    print(2)
+    action_history = _get_action_history_summary(state)
+    print(3)
+    node_results = _get_node_results_summary(state)
+    planning_prompt = PLANNER_PROMPT.format(
+        query=query,
+        max_iterations=state.get("max_iterations", 10),
+        iteration_count=state.get("loop_count", 0),
+        schema_summary=schema_summary,
+        action_history=action_history,
+        node_results=node_results,
+    )
+    print("flsjfaoi")
+    reply = _call_claude("planner", system, planning_prompt)
+    print(reply)
+    try:
+        if isinstance(reply, str):
+            reply = json.loads(reply)
+
+        plan = reply.get("plan", {})
+        current_step = reply.get("current_step", "1")
+
+        update = {
+            "last_agent_action": "planner",
+            "action_history": state.get("action_history", [])
+            + [
+                {
+                    "action": "planner",
+                    "outcome": f"Generated plan with {len(plan)} steps.",
+                }
+            ],
+            "loop_count": state.get("loop_count", 0) + 1,
+            "pending_hil_approval": False,  # Clear HIL flag unless plan sets it
+        }
+
+        # If the plan specifies a HIL step as current, set the flag
+        target_action = plan.get(current_step, {}).get("action", "")
+        if target_action in ["hil_context", "hil_verify"]:
+            update["pending_hil_approval"] = True
+
+        # Store the plan and current step in state
+        # (Assuming these fields are added to state in graph.py)
+        update["plan"] = plan
+        update["current_step_id"] = current_step
+
+        return update
+
+    except Exception as e:
+        logger.error("Planner failed to parse JSON: %s", e)
+        return {"loop_count": state.get("loop_count", 0) + 1}
+
+
+def code_executor(state: dict) -> dict:
+    """
+    Executes Python code on DataFrames derived from Excel sheets.
+    """
+    _log_node_entry("code_executor")
+
+    plan = state.get("plan", {})
+    current_step_id = state.get("current_step_id", "1")
+    step_info = plan.get(current_step_id, {})
+    md_script = step_info.get("md_script", "")
+
+    if not md_script:
+        logger.warning("code_executor: No md_script found for step %s", current_step_id)
+        return {"loop_count": state.get("loop_count", 0) + 1}
+
+    # Prepare historical context (outputs of previous steps)
+    step_outputs = state.get("step_outputs", {})
+
+    # Load DataFrames
+    sheets_raw = state.get("sheets") or {}
+    sheets_dict = sheets_raw.get("cleaned", {}) if isinstance(sheets_raw, dict) else {}
+
+    # Convert to DataFrames for execution
+    dfs = {}
+    for name, rows in sheets_dict.items():
+        if rows and len(rows) > 0:
+            dfs[name] = pd.DataFrame(rows[1:], columns=rows[0])
+        else:
+            dfs[name] = pd.DataFrame()
+
+    messages = [
+        SystemMessage(
+            content="You are a Python data analyst. Write a function `def extract_value(dfs):` as requested."
+        ),
+        HumanMessage(content=md_script),
+    ]
+
+    try:
+        exec_result = llm_exec_with_retry(
+            fn_name="extract_value",
+            messages=messages,
+            fn_kwargs={"dfs": dfs},
+            exec_globals={"pd": pd},
+        )
+
+        result_val = exec_result["result"]
+
+        # Store output for planner to see in next iteration
+        new_outputs = {**step_outputs, current_step_id: result_val}
+
+        update = {
+            "step_outputs": new_outputs,
+            "last_agent_action": "code_executor",
+            "action_history": state.get("action_history", [])
+            + [
+                {
+                    "action": "code_executor",
+                    "outcome": f"Executed code. Result: {result_val}",
+                }
+            ],
+            "loop_count": state.get("loop_count", 0) + 1,
+            "messages": [
+                {"role": "assistant", "content": f"Code execution result: {result_val}"}
+            ],
+        }
+        return update
+
+    except Exception as e:
+        logger.error("code_executor failed: %s", e)
+        return {
+            "loop_count": state.get("loop_count", 0) + 1,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": f"Failed to execute code for step {current_step_id}: {str(e)}",
+                }
+            ],
+        }
 
 
 def route_query(state: dict) -> str:
     """
-    Conditional edge: classify the user query into one of: suggest, verify, format, flag.
-    Returns a string key used by the conditional edge.
+    Conditional edge: uses the plan from state to decide which node to visit next.
     """
-    _log_node_entry("route_query")
-    query = state.get("current_query", "")
-    logger.debug("Routing query: %s", query)
-    system = _build_system_prompt(state)
-    prompt = ROUTING_PROMPT.format(query=query)
-    planning = PLANNER_PROMPT.format(
-        query=query,
-        max_iterations=state.get("max_iterations", 25),
-        iteration_count=state.get("loop_count", 1),
-        last_agent_action=state.get("last_agent_action", "None"),
-    )
-    to_write = _call_claude("planner", system, planning)
-    result = _call_claude("route_query", system, prompt).strip().lower()
-    logger.debug("Routing result: %s", result)
+    plan = state.get("plan", {})
+    current_step_id = state.get("current_step_id", "1")
 
-    valid = {"suggest", "verify", "format", "flag", "find_facts"}
-    routing_result = result if result in valid else "suggest"
+    if not plan or current_step_id not in plan:
+        return "END"
 
-    return routing_result
+    action = plan[current_step_id].get("action", "suggest")
+
+    # Map action names to graph node keys
+    mapping = {
+        "suggest_citations": "suggest_citations",
+        "code_executor": "code_executor",
+        "verify_consistency": "verify_consistency",
+        "find_relation": "find_relation",
+        "flag_gaps": "flag_gaps",
+        "format_citation": "format_citation",
+        "hil_context": "hil_context",
+        "hil_verify": "hil_verify",
+    }
+
+    return mapping.get(action, "END")
 
 
 def suggest_citations(state: dict) -> dict:
@@ -208,6 +424,17 @@ def suggest_citations(state: dict) -> dict:
     update = {
         "messages": [{"role": "assistant", "content": reply}],
         "last_agent_action": "suggest",
+        "action_history": state.get("action_history", [])
+        + [
+            {
+                "action": "suggest_citations",
+                "outcome": (
+                    "Found citation candidates."
+                    if "📌 Cite" in reply
+                    else "No candidates found."
+                ),
+            }
+        ],
         "loop_count": state.get("loop_count", 0) + 1,
     }
     return update
@@ -226,6 +453,13 @@ def verify_consistency(state: dict) -> dict:
     update = {
         "messages": [{"role": "assistant", "content": reply}],
         "last_agent_action": "verify",
+        "action_history": state.get("action_history", [])
+        + [
+            {
+                "action": "verify_consistency",
+                "outcome": f"Verified claim. Found {len(gaps)} gaps.",
+            }
+        ],
         "gaps_found": gaps,
         "loop_count": state.get("loop_count", 0) + 1,
     }
@@ -324,12 +558,28 @@ def find_relation(state: dict) -> dict:
                 "claim": gap,
                 "candidates": parsed,
             },
+            "action_history": state.get("action_history", [])
+            + [
+                {
+                    "action": "find_relation",
+                    "outcome": f"Found {len(parsed)} candidates for gap. Escalated to HIL.",
+                }
+            ],
             "loop_count": state.get("loop_count", 0) + 1,
         }
         return update
 
     # All gaps exhausted without a parseable result
-    update = {"loop_count": state.get("loop_count", 0) + 1}
+    update = {
+        "action_history": state.get("action_history", [])
+        + [
+            {
+                "action": "find_relation",
+                "outcome": "No related data found for any gaps.",
+            }
+        ],
+        "loop_count": state.get("loop_count", 0) + 1,
+    }
 
     return update
 
@@ -439,6 +689,8 @@ Respond with ONLY valid JSON in this format:
     update = {
         "pending_hil_approval": False,
         "hil_payload": {},
+        "action_history": state.get("action_history", [])
+        + [{"action": "hil_verify", "outcome": f"Human decided: {action}."}],
         "messages": messages_update,
     }
     return update
@@ -455,6 +707,8 @@ def format_citation(state: dict) -> dict:
     update = {
         "messages": [{"role": "assistant", "content": reply}],
         "last_agent_action": "format",
+        "action_history": state.get("action_history", [])
+        + [{"action": "format_citation", "outcome": "Formatted citation."}],
         "loop_count": state.get("loop_count", 0) + 1,
     }
     return update
@@ -471,6 +725,8 @@ def flag_gaps(state: dict) -> dict:
     update = {
         "messages": [{"role": "assistant", "content": reply}],
         "last_agent_action": "flag",
+        "action_history": state.get("action_history", [])
+        + [{"action": "flag_gaps", "outcome": "Identified unsupported claims."}],
         "loop_count": state.get("loop_count", 0) + 1,
     }
     return update
@@ -493,6 +749,13 @@ def find_facts(state: dict) -> dict:
             {"role": "assistant", "content": json.dumps(reply.get("response", {}))}
         ],
         "last_agent_action": "find_facts",
+        "action_history": state.get("action_history", [])
+        + [
+            {
+                "action": "find_facts",
+                "outcome": f"Extracted {len(reply.get('response', {}))} claims from slides.",
+            }
+        ],
         "loop_count": state.get("loop_count", 0) + 1,
     }
     return update

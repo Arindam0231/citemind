@@ -5,7 +5,9 @@ from typing import List, Dict, Any, Optional
 import os
 from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, SystemMessage
 from langchain_anthropic import ChatAnthropic
+from ollama import chat
 
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -21,14 +23,80 @@ def is_safe_code(code: str) -> bool:
     return True
 
 
+def _extract_json(raw: Any) -> Any:
+    """
+    Strip markdown fences, find JSON structures { } or [ ], and parse.
+    If input is not a string, returns as is.
+    """
+    if not isinstance(raw, str):
+        return raw
+
+    if not raw or not raw.strip():
+        return raw
+
+    text = raw.strip()
+
+    # 1. Try direct parse
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # 2. Try to find the first '{' or '[' and last '}' or ']'
+    # Using regex to find the largest span starting with { or [ and ending with } or ]
+    match = re.search(r"([\[{][\s\S]*[\]}])", text)
+    if match:
+        json_str = match.group(1).strip()
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            pass
+
+    # 3. Fallback: try stripping markdown code blocks if the above failed
+    # (though re.search should have caught it)
+    text = re.sub(r"^```(?:json)?\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    text = text.strip()
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return raw
+
+
+LANGCHAIN_ROLE_MAP = {
+    "human": "user",
+    "ai": "assistant",
+    "system": "system",
+    "tool": "tool",
+}
+
+
+def _to_ollama_messages(messages: list) -> list[dict]:
+    result = []
+    for m in messages:
+        # Already a plain dict (e.g. {"role": ..., "content": ...})
+        if isinstance(m, dict):
+            if "role" in m:
+                result.append(m)
+            elif "type" in m:
+                result.append(
+                    {
+                        "role": LANGCHAIN_ROLE_MAP.get(m["type"], m["type"]),
+                        "content": m.get("content", ""),
+                    }
+                )
+        # LangChain BaseMessage subclass
+        else:
+            role = LANGCHAIN_ROLE_MAP.get(m.type, m.type)
+            result.append({"role": role, "content": m.content})
+    return result
+
+
 def llm_service(messages: List[BaseMessage], use_cache: bool = False) -> dict | str:
-    print(
-        "ANTHROPIC_API_KEY:", os.getenv("ANTHROPIC_API_KEY")
-    )  # Debug: check if key is loaded
     print("LLM Service called with messages:")
     for msg in messages:
         print(f"  {msg.type}: {msg.content}")
-    llm = ChatAnthropic(model="claude-sonnet-4-20250514", temperature=0)
 
     logger.debug(
         "llm_service | invoking LLM",
@@ -56,8 +124,10 @@ def llm_service(messages: List[BaseMessage], use_cache: bool = False) -> dict | 
             return cache[cache_key]
 
     try:
-        response = llm.invoke(messages)
-
+        response = chat(
+            model="qwen3.5",
+            messages=_to_ollama_messages(messages),
+        ).message
         logger.debug(
             "llm_service | response received",
             extra={
@@ -66,7 +136,8 @@ def llm_service(messages: List[BaseMessage], use_cache: bool = False) -> dict | 
             },
         )
         try:
-            result = json.loads(response.content)
+            cleaned_response_content = _extract_json(response.content)
+            result = cleaned_response_content
         except Exception as e:
             logger.warning(
                 "llm_service | json.loads failed, returning raw content",
@@ -242,3 +313,71 @@ def llm_exec_with_retry(
         f"llm_exec_with_retry: all {max_retries + 1} attempts failed "
         f"for '{fn_name}'.\nLast error: {last_error}"
     )
+
+
+def llm_service_claude(
+    messages: List[BaseMessage], use_cache: bool = False
+) -> dict | str:
+    print("LLM Service called with messages:")
+    for msg in messages:
+        print(f"  {msg.type}: {msg.content}")
+    llm = ChatAnthropic(model="claude-sonnet-4-20250514", temperature=0)
+
+    logger.debug(
+        "llm_service | invoking LLM",
+        extra={
+            "message_count": len(messages),
+            "last_message_role": (
+                getattr(messages[-1], "type", "unknown") if messages else None
+            ),
+            "last_message_preview": (
+                str(messages[-1].content)[:200] if messages else None
+            ),
+        },
+    )
+
+    if use_cache:
+        cache_key = hashlib.md5(
+            json.dumps(
+                [{"role": m.type, "content": str(m.content)} for m in messages],
+                sort_keys=True,
+            ).encode()
+        ).hexdigest()
+
+        if cache_key in cache:
+            logger.debug("llm_service | cache hit | key=%s", cache_key)
+            return cache[cache_key]
+
+    try:
+        response = llm.invoke(messages)
+
+        logger.debug(
+            "llm_service | response received",
+            extra={
+                "response_preview": str(response.content)[:200],
+                "response_type": type(response.content).__name__,
+            },
+        )
+        try:
+            cleaned_response_content = _extract_json(response.content)
+            result = cleaned_response_content
+        except Exception as e:
+            logger.warning(
+                "llm_service | json.loads failed, returning raw content",
+                extra={"error": str(e)},
+            )
+            result = response.content
+
+        if use_cache:
+            cache[cache_key] = result
+            logger.debug("llm_service | cache miss | stored key=%s", cache_key)
+
+        return result
+
+    except Exception as e:
+        logger.error(
+            "llm_service | LLM invocation failed",
+            extra={"error": str(e)},
+            exc_info=True,
+        )
+        raise

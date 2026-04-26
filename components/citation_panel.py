@@ -1,5 +1,5 @@
 """
-CiteMind — Citation panel component.
+Checkmate — Citation panel component.
 Displays citation cards with status, confidence, and action buttons.
 """
 from __future__ import annotations

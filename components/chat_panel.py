@@ -1,5 +1,5 @@
 """
-CiteMind — AI chat panel component.
+Checkmate — AI chat panel component.
 Message scroll, context pills, suggestion chips, and input.
 """
 
@@ -35,7 +35,7 @@ def build_chat_panel() -> html.Div:
                     html.Div(
                         [
                             html.Div("🔬", className="chat-welcome-icon"),
-                            html.H3("CiteMind"),
+                            html.H3("Checkmate"),
                             html.P(
                                 "Upload your files, then select shapes "
                                 "or ask me to find citations."
@@ -96,7 +96,7 @@ def render_chat_bubbles(
             html.Div(
                 [
                     html.Div("🔬", className="chat-welcome-icon"),
-                    html.H3("CiteMind"),
+                    html.H3("Checkmate"),
                     html.P(
                         "Upload your files, then select shapes "
                         "or ask me to find citations."
@@ -125,7 +125,7 @@ def render_chat_bubbles(
             bubbles.append(
                 html.Div(
                     [
-                        html.Span("CiteMind", className="bubble-label"),
+                        html.Span("Checkmate", className="bubble-label"),
                         html.Div(_format_agent_message(content)),
                     ],
                     className="bubble-agent",
