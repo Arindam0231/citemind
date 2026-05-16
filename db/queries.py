@@ -1,5 +1,5 @@
 """
-Checkmate — Named SQL query functions for all CRUD operations.
+CiteMind — Named SQL query functions for all CRUD operations.
 """
 
 from __future__ import annotations

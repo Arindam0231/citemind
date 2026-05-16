@@ -1,5 +1,5 @@
 """
-Checkmate Agent — LangGraph StateGraph definition.
+CiteMind Agent — LangGraph StateGraph definition.
 """
 
 from typing import TypedDict, List, Annotated
@@ -67,7 +67,7 @@ class CitationState(TypedDict):
 
 def build_graph() -> StateGraph:
     """
-    Build and compile the Checkmate LangGraph.
+    Build and compile the CiteMind LangGraph.
     """
     graph = StateGraph(CitationState)
 
@@ -135,7 +135,7 @@ def build_graph() -> StateGraph:
 # ── Agent class ─────────────────────────────────────────
 
 
-class CheckmateGraph:
+class CiteMindGraph:
     """
     Encapsulates the compiled LangGraph agent.
     Holds the compiled graph as an instance attribute to avoid global state.
@@ -168,7 +168,7 @@ class CheckmateGraph:
         xlsx_filename: str = "",
     ) -> dict:
         """
-        Invoke the Checkmate agent with a user query.
+        Invoke the CiteMind agent with a user query.
         """
         input_state = {
             "slides": slides or [],
@@ -202,9 +202,9 @@ class CheckmateGraph:
 
 
 @functools.lru_cache(maxsize=1)
-def get_graph() -> CheckmateGraph:
-    """Return the cached (singleton) CheckmateGraph instance."""
-    return CheckmateGraph()
+def get_graph() -> CiteMindGraph:
+    """Return the cached (singleton) CiteMindGraph instance."""
+    return CiteMindGraph()
 
 
 # ── Public API (module-level convenience wrapper) ───────
@@ -216,5 +216,5 @@ def run_agent(
     sheets: dict,
     messages: list[dict],
 ) -> dict:
-    """Module-level convenience wrapper around CheckmateGraph.run_agent."""
+    """Module-level convenience wrapper around CiteMindGraph.run_agent."""
     return get_graph().run_agent(query, slides, sheets, messages)

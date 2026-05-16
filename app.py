@@ -1,5 +1,5 @@
 """
-Checkmate — Dash application entry point.
+CiteMind — Dash application entry point.
 4-zone layout: Header, Slide Panel, Citations Panel, Chat Panel.
 """
 
@@ -23,8 +23,8 @@ app = dash.Dash(
         {"src": "https://cdn.tailwindcss.com"},
     ],
     suppress_callback_exceptions=True,
-    title="Checkmate",
-    update_title="Checkmate · thinking...",
+    title="CiteMind",
+    update_title="CiteMind · thinking...",
 )
 
 
@@ -43,7 +43,7 @@ def _upload_zone(file_type: str) -> html.Div:
 
 
 def build_layout() -> html.Div:
-    """Build the complete Checkmate layout."""
+    """Build the complete CiteMind layout."""
     return html.Div(
         [
             # ── Hidden Stores ──────────────────────────────
@@ -75,7 +75,7 @@ def build_layout() -> html.Div:
                     html.Div(
                         [
                             html.Div("C", className="logo-icon"),
-                            html.Span("Checkmate", className="logo-text"),
+                            html.Span("CiteMind", className="logo-text"),
                         ],
                         id="theme-toggle",
                         className="logo-group",
@@ -123,7 +123,7 @@ def build_layout() -> html.Div:
             # ── Upload Landing ──────────────────────────────
             html.Div(
                 [
-                    html.Div("Checkmate", className="upload-title"),
+                    html.Div("CiteMind", className="upload-title"),
                     html.Div(
                         "Upload your PowerPoint and Excel files to begin "
                         "linking citations between slides and data.",

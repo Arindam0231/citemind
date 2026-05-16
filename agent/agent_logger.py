@@ -1,5 +1,5 @@
 """
-Checkmate Agent Logger — Logs agent actions and outputs to a file.
+CiteMind Agent Logger — Logs agent actions and outputs to a file.
 Clears the log file before each run.
 """
 

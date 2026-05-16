@@ -1,5 +1,5 @@
 """
-Checkmate — Excel data preview strip component.
+CiteMind — Excel data preview strip component.
 Compact table display at the bottom of the slide panel.
 """
 

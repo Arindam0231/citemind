@@ -1,5 +1,5 @@
 """
-Checkmate Agent — LangGraph node functions.
+CiteMind Agent — LangGraph node functions.
 Each node receives the full CitationState and returns a partial update dict.
 """
 

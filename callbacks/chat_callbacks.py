@@ -1,5 +1,5 @@
 """
-Checkmate — Chat panel callbacks.
+CiteMind — Chat panel callbacks.
 UI side only. Hooks form inputs into generating AI responses via LangGraph.
 """
 
@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from dash import Input, Output, State, callback_context, dcc, no_update
 from dash.exceptions import PreventUpdate
+from langgraph.types import Command
 
 from components.chat_panel import render_chat_bubbles
 from agent.graph import get_graph
@@ -20,6 +21,44 @@ executor = ThreadPoolExecutor(max_workers=4)
 
 
 def register_chat_callbacks(app):
+    def _build_hil_chat_prompt(payload):
+        """Create a chat-friendly question when agent requests HIL."""
+        if not payload or not isinstance(payload, dict):
+            return ""
+
+        payload_type = payload.get("type")
+        if payload_type == "context_clarification":
+            message = payload.get("message", "Please clarify the context scope.")
+            return f"Need your input before I continue:\n{message}\nReply here in chat."
+
+        if payload_type in ("relation_verification", "transformation_request"):
+            claim = payload.get("claim", "")
+            candidates = payload.get("candidates", [])
+            top = candidates[0] if candidates else {}
+            reason = top.get("reason", "No reason provided.")
+            row_ref = top.get("row_ref", "Unknown")
+            if payload_type == "transformation_request":
+                return (
+                    "I need a HIL decision to proceed.\n"
+                    f"Claim: {claim}\n"
+                    f"Suggested source: {row_ref}\n"
+                    f"Reason: {reason}\n"
+                    "Reply with one of: accept / reject, or paste transform code."
+                )
+            return (
+                "I need a HIL decision to proceed.\n"
+                f"Claim: {claim}\n"
+                f"Suggested source: {row_ref}\n"
+                f"Reason: {reason}\n"
+                "Reply with accept or reject."
+            )
+
+        if payload_type == "chat_question":
+            question = payload.get("question") or payload.get("message") or ""
+            return f"{question}\nReply here in chat."
+
+        return "I need your input before continuing. Reply in chat."
+
 
     # ─────────────────────────────────────────────────────────
     # Chat Input / Quick Chip Submit
@@ -67,6 +106,7 @@ def register_chat_callbacks(app):
         State("store-sheets-raw", "data"),
         State("store-pptx-filename", "data"),
         State("store-xlsx-filename", "data"),
+        State("store-hil-payload", "data"),
         prevent_initial_call=True,
     )
     def process_ai_response(
@@ -80,6 +120,7 @@ def register_chat_callbacks(app):
         sheets,
         pptx_filename,
         xlsx_filename,
+        existing_hil_payload,
     ):
         if not is_loading or not history:
             raise PreventUpdate
@@ -92,26 +133,30 @@ def register_chat_callbacks(app):
         try:
             query = last_msg["content"]
             cfg = {"configurable": {"thread_id": project_id or "default"}}
-            slides = {}
-            for sid in slide_ids:
-                slides[sid] = []
-            for shape in slide_shapes:
-                sid = shape.get("slide_id")
-                if sid in slides:
-                    slides[sid].append(shape)
-
-            app_state = {
-                "slides": slides or [],
-                "sheets": sheets or {},
-                "pptx_filename": pptx_filename or "",
-                "xlsx_filename": xlsx_filename or "",
-                "messages": [{"role": "user", "content": query}],
-                "current_query": query,
-            }
-
-            # Invoke Graph
             graph = get_graph()
-            final_state = executor.submit(graph.invoke, app_state, cfg).result()
+            if existing_hil_payload:
+                resume_data = {"action": "chat", "message": query}
+                final_state = executor.submit(
+                    graph.invoke, Command(resume=resume_data), cfg
+                ).result()
+            else:
+                slides = {}
+                for sid in slide_ids:
+                    slides[sid] = []
+                for shape in slide_shapes:
+                    sid = shape.get("slide_id")
+                    if sid in slides:
+                        slides[sid].append(shape)
+
+                app_state = {
+                    "slides": slides or [],
+                    "sheets": sheets or {},
+                    "pptx_filename": pptx_filename or "",
+                    "xlsx_filename": xlsx_filename or "",
+                    "messages": [{"role": "user", "content": query}],
+                    "current_query": query,
+                }
+                final_state = executor.submit(graph.invoke, app_state, cfg).result()
 
             hil_payload = None
             if isinstance(final_state, dict):
@@ -132,9 +177,7 @@ def register_chat_callbacks(app):
                         agent_msg = getattr(last_ai, "content", "")
 
             if hil_payload:
-                agent_msg = (
-                    "Please review the verification card in the Citations panel."
-                )
+                agent_msg = _build_hil_chat_prompt(hil_payload)
             elif not agent_msg:
                 agent_msg = "My scan complete. See citations panel for results."
 
@@ -204,8 +247,6 @@ def register_chat_callbacks(app):
         graph = get_graph()
 
         try:
-            from langgraph.types import Command
-
             # Resume graph with user decision
             final_state = executor.submit(
                 graph.invoke, Command(resume=resume_data), cfg

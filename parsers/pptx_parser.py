@@ -1,5 +1,5 @@
 """
-Checkmate — PowerPoint parser with shape-level extraction.
+CiteMind — PowerPoint parser with shape-level extraction.
 Extracts every shape with normalised coordinates and run-level text.
 """
 from __future__ import annotations

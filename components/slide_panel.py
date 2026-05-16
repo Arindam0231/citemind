@@ -1,5 +1,5 @@
 """
-Checkmate — Slide panel component.
+CiteMind — Slide panel component.
 Displays the slide as rendered HTML with shape overlays and navigation.
 """
 from __future__ import annotations
