@@ -170,7 +170,7 @@ def extract_slide(pptx_bytes: bytes, slide_index: int) -> dict:
     return {"slide": slide, "slide_w": slide_w, "slide_h": slide_h}
 
 
-def render_slide_to_html(pptx_bytes: bytes, slide_index: int) -> str:
+def  render_slide_to_html(pptx_bytes: bytes, slide_index: int) -> str:
     """
     Parse *pptx_bytes* with python-pptx and return a self-contained HTML
     fragment that renders slide *slide_index* using absolute-% positioning.

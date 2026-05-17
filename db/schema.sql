@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS slides (
     slide_number   INTEGER NOT NULL,
     title          TEXT,
     png_path       TEXT,
+    rendered_html   TEXT,
     shape_count    INTEGER NOT NULL DEFAULT 0,
     has_table      INTEGER NOT NULL DEFAULT 0,
     has_chart      INTEGER NOT NULL DEFAULT 0,
