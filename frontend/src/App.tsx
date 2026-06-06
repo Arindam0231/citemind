@@ -7,6 +7,7 @@ import ChatPanel from './components/ChatPanel';
 function App() {
   const [pptxId, setPptxId] = useState<number | null>(null);
   const [pptxName, setPptxName] = useState<string>('');
+  const [slides, setSlides] = useState<any[]>([]);
 
   const [xlsxId, setXlsxId] = useState<number | null>(null);
   const [xlsxName, setXlsxName] = useState<string>('');
@@ -19,13 +20,13 @@ function App() {
     if (pptxId !== null && xlsxId !== null && !projectId && !initializingRef.current) {
       initializingRef.current = true;  // lock before async call
 
-      fetch('/api/upload/initialize', {
+      fetch('/api/projects/init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pptx_id: pptxId, xlsx_id: xlsxId })
+        body: JSON.stringify({ pptx_file_id: pptxId, xlsx_file_id: xlsxId })
       })
         .then(res => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);  // ← also add this
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.json();
         })
         .then(data => setProjectId(data.project_id))
@@ -36,9 +37,12 @@ function App() {
     }
   }, [pptxId, xlsxId, projectId]);
 
-  const handleUploadPptx = (fileId: number, filename: string) => {
+  const handleUploadPptx = (fileId: number, filename: string, uploadedSlides?: any[]) => {
     setPptxId(fileId);
     setPptxName(filename);
+    if (uploadedSlides) {
+      setSlides(uploadedSlides);
+    }
   };
 
   const handleUploadXlsx = (fileId: number, filename: string) => {
@@ -63,7 +67,7 @@ function App() {
         />
       ) : (
         <div className="main-layout" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          <LeftPanel />
+          <LeftPanel slides={slides} setSlides={setSlides} />
           <ChatPanel />
         </div>
       )}

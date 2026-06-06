@@ -152,15 +152,14 @@ def insert_slide(
     shape_count: int = 0,
     has_table: bool = False,
     has_chart: bool = False,
-    rendered_html: Optional[str] = None,
 ) -> str:
     sid = _uuid()
     with get_db() as db:
         db.execute(
             """INSERT INTO slides
                (id, pptx_file_id, slide_index, slide_number, title,
-                png_path, shape_count, has_table, has_chart, rendered_html)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                png_path, shape_count, has_table, has_chart)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 sid,
                 pptx_file_id,
@@ -171,7 +170,6 @@ def insert_slide(
                 shape_count,
                 int(has_table),
                 int(has_chart),
-                rendered_html,
             ),
         )
     return sid
@@ -731,3 +729,13 @@ def get_project_stats(project_id: str) -> dict:
             stats[r["status"]] = r["cnt"]
             stats["total"] += r["cnt"]
         return stats
+
+
+def update_shape_text(shape_id: str, full_text: str, runs_json: str) -> None:
+    """Update shape's text and runs_json in the database."""
+    with get_db() as db:
+        db.execute(
+            "UPDATE shapes SET full_text=?, runs_json=? WHERE id=?",
+            (full_text, runs_json, shape_id),
+        )
+

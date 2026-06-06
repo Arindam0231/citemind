@@ -63,70 +63,50 @@ class CitationState(TypedDict):
 
 
 # ── Graph Construction ──────────────────────────────────
-
-
 def build_graph() -> StateGraph:
-    """
-    Build and compile the CiteMind LangGraph.
-    """
     graph = StateGraph(CitationState)
 
-    # Add nodes
+    # --- Subgraph: linear citation pipeline ---
+    citation_pipeline = StateGraph(CitationState)
+    citation_pipeline.add_node("find_facts", find_facts)
+    citation_pipeline.add_node("find_relation", find_relation)
+    citation_pipeline.add_node("suggest_citations", suggest_citations)
+    citation_pipeline.add_node("verify_consistency", verify_consistency)
+    citation_pipeline.add_node("format_citation", format_citation)
+    citation_pipeline.set_entry_point("find_facts")
+    citation_pipeline.add_edge("find_facts", "find_relation")
+    citation_pipeline.add_edge("find_relation", "suggest_citations")
+    citation_pipeline.add_edge("suggest_citations", "verify_consistency")
+    citation_pipeline.add_edge("verify_consistency", "format_citation")
+    citation_pipeline.add_edge("format_citation", END)
+    # -----------------------------------------------
+
     graph.add_node("resolve_mentions", resolve_mentions)
     graph.add_node("planner", planner)
+    graph.add_node("citation_pipeline", citation_pipeline.compile())  # subgraph
     graph.add_node("code_executor", code_executor)
-    graph.add_node("suggest_citations", suggest_citations)
-    graph.add_node("verify_consistency", verify_consistency)
-    graph.add_node("format_citation", format_citation)
     graph.add_node("flag_gaps", flag_gaps)
-    graph.add_node("find_relation", find_relation)
-    graph.add_node("find_facts", find_facts)
-    graph.add_node("hil_context", hil_context)
-    graph.add_node("hil_verify", hil_verify)
+    graph.add_node("hil_verify", hil_verify)  # single HIL node
 
-    # Entry point: resolve mentions first to scope the context
     graph.set_entry_point("resolve_mentions")
+    graph.add_edge("resolve_mentions", "planner")
 
-    # From resolve_mentions, always go to planner (unless HIL needed)
-    graph.add_conditional_edges(
-        "resolve_mentions",
-        lambda s: "hil_context" if s.get("pending_hil_approval") else "find_facts",
-        {
-            "hil_context": "hil_context",
-            "find_facts": "find_facts",
-        },
-    )
-
-    # After HIL context, go to planner
-    graph.add_edge("hil_context", "planner")
-
-    # Planner decides what to do next based on current step
+    # Planner only routes between HIGH-LEVEL branches
     graph.add_conditional_edges(
         "planner",
         route_query,
         {
-            "suggest_citations": "suggest_citations",
+            "citation_pipeline": "citation_pipeline",
             "code_executor": "code_executor",
-            "verify_consistency": "verify_consistency",
-            "find_relation": "find_relation",
             "flag_gaps": "flag_gaps",
-            "format_citation": "format_citation",
-            "hil_context": "hil_context",
             "hil_verify": "hil_verify",
             "END": END,
         },
     )
 
-    # All action nodes loop back to planner
-    graph.add_edge("find_facts", "planner")
-    graph.add_edge("suggest_citations", "planner")
+    graph.add_edge("citation_pipeline", "planner")
     graph.add_edge("code_executor", "planner")
-    graph.add_edge("verify_consistency", "planner")
-    graph.add_edge("find_relation", "planner")
-    graph.add_edge("format_citation", "planner")
     graph.add_edge("flag_gaps", "planner")
-
-    # HIL Verify loops back to planner after completion
     graph.add_edge("hil_verify", "planner")
 
     return graph

@@ -24,6 +24,8 @@ def serialize_slide(slide: Any, slide_w: int, slide_h: int) -> List[dict]:
         full_text, runs_json, z_order, has_table, has_chart
     """
     shapes = []  # type: List[dict]
+    from pptx.enum.text import PP_ALIGN
+
     for z_order, shape in enumerate(slide.shapes):
         entry = {
             "pptx_shape_id": shape.shape_id,
@@ -41,42 +43,107 @@ def serialize_slide(slide: Any, slide_w: int, slide_h: int) -> List[dict]:
         }
 
         if shape.has_text_frame:
-            run_idx = 0
             all_text = []  # type: List[str]
             for para in shape.text_frame.paragraphs:
+                align_str = "LEFT"
+                try:
+                    if para.alignment == PP_ALIGN.CENTER:
+                        align_str = "CENTER"
+                    elif para.alignment == PP_ALIGN.RIGHT:
+                        align_str = "RIGHT"
+                    elif para.alignment == PP_ALIGN.JUSTIFY:
+                        align_str = "JUSTIFY"
+                except Exception:
+                    pass
+
                 for run in para.runs:
-                    font_size = None
-                    if run.font.size is not None:
-                        font_size = int(run.font.size)
+                    bold = False
+                    italic = False
+                    try:
+                        bold = bool(run.font.bold)
+                    except Exception:
+                        pass
+                    try:
+                        italic = bool(run.font.italic)
+                    except Exception:
+                        pass
+                    font_size = 14
+                    try:
+                        if run.font.size is not None:
+                            font_size = int(run.font.size.pt)
+                    except Exception:
+                        pass
+                    color_hex = "#000000"
+                    try:
+                        rgb = run.font.color.rgb
+                        if rgb:
+                            color_hex = "#{:02X}{:02X}{:02X}".format(rgb[0], rgb[1], rgb[2])
+                    except Exception:
+                        pass
+
                     entry["runs"].append({
-                        "index": run_idx,
                         "text": run.text,
-                        "bold": bool(run.font.bold),
-                        "size": font_size,
-                        "is_numeric": bool(re.search(r'[\d,.%₹$€£¥]', run.text)),
+                        "bold": bold,
+                        "italic": italic,
+                        "font_size": font_size,
+                        "color": color_hex,
+                        "alignment": align_str,
                     })
                     all_text.append(run.text)
-                    run_idx += 1
             entry["full_text"] = "".join(all_text)
 
         if hasattr(shape, "has_table") and shape.has_table:
             entry["has_table"] = True
-            # Extract table text as runs too
-            run_idx = len(entry["runs"])
             table_texts = []  # type: List[str]
             for row in shape.table.rows:
                 for cell in row.cells:
-                    text = cell.text.strip()
-                    if text:
-                        entry["runs"].append({
-                            "index": run_idx,
-                            "text": text,
-                            "bold": False,
-                            "size": None,
-                            "is_numeric": bool(re.search(r'[\d,.%₹$€£¥]', text)),
-                        })
-                        table_texts.append(text)
-                        run_idx += 1
+                    if cell.text_frame:
+                        for para in cell.text_frame.paragraphs:
+                            align_str = "LEFT"
+                            try:
+                                if para.alignment == PP_ALIGN.CENTER:
+                                    align_str = "CENTER"
+                                elif para.alignment == PP_ALIGN.RIGHT:
+                                    align_str = "RIGHT"
+                                elif para.alignment == PP_ALIGN.JUSTIFY:
+                                    align_str = "JUSTIFY"
+                            except Exception:
+                                pass
+
+                            for run in para.runs:
+                                bold = False
+                                italic = False
+                                try:
+                                    bold = bool(run.font.bold)
+                                except Exception:
+                                    pass
+                                try:
+                                    italic = bool(run.font.italic)
+                                except Exception:
+                                    pass
+                                font_size = 12
+                                try:
+                                    if run.font.size is not None:
+                                        font_size = int(run.font.size.pt)
+                                except Exception:
+                                    pass
+                                color_hex = "#000000"
+                                try:
+                                    rgb = run.font.color.rgb
+                                    if rgb:
+                                        color_hex = "#{:02X}{:02X}{:02X}".format(rgb[0], rgb[1], rgb[2])
+                                except Exception:
+                                    pass
+
+                                entry["runs"].append({
+                                    "text": run.text,
+                                    "bold": bold,
+                                    "italic": italic,
+                                    "font_size": font_size,
+                                    "color": color_hex,
+                                    "alignment": align_str,
+                                })
+                                table_texts.append(run.text)
             if table_texts:
                 if entry["full_text"]:
                     entry["full_text"] += " " + " ".join(table_texts)

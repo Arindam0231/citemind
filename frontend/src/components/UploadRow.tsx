@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 
 interface UploadRowProps {
-  onUploadPptx: (fileId: number, filename: string) => void;
+  onUploadPptx: (fileId: number, filename: string, slides?: any[]) => void;
   onUploadXlsx: (fileId: number, filename: string) => void;
 }
 
@@ -27,7 +27,7 @@ export default function UploadRow({ onUploadPptx, onUploadXlsx }: UploadRowProps
       if (!response.ok) throw new Error("Upload failed");
       
       const data = await response.json();
-      if (type === 'pptx') onUploadPptx(data.file_id, data.filename);
+      if (type === 'pptx') onUploadPptx(data.file_id, data.filename, data.slides);
       else onUploadXlsx(data.file_id, data.filename);
 
     } catch (err) {

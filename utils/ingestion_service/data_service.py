@@ -258,8 +258,12 @@ class DataIngestionService:
             If the LLM returns unsafe or malformed code.
         """
         try:
-            df, report = standard_data_pipeline(peek_df)
-            return df, report
+            # df, report = standard_data_pipeline(peek_df)
+            # return df, report
+            return (
+                peek_df,
+                "No Transformation Applied - peek_and_transform is currently a no-op. This is a placeholder for future LLM-guided transformations.",
+            )  # Skip transformation for now, just return the original with an empty report
 
         except Exception as exc:
             raise ValueError(f"peek_and_transform failed: {exc}") from exc

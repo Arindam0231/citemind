@@ -272,3 +272,85 @@ def _error_html(msg: str) -> str:
         'width:100%;height:100%;color:#f87171;font-size:13pt;">'
         "⚠ Could not render slide: {}</div>"
     ).format(_escape_html(msg))
+
+
+def export_slide_to_png(pptx_source: bytes | str, slide_index: int, output_path: str) -> None:
+    """
+    Renders the background and solid shape fills of the PPTX slide to a 16:9 PNG.
+    The text content is omitted because it is overlaid as absolute elements in the frontend.
+    """
+    from PIL import Image, ImageDraw
+
+    if isinstance(pptx_source, bytes):
+        prs = Presentation(io.BytesIO(pptx_source))
+    else:
+        prs = Presentation(pptx_source)
+
+    slide_w = int(prs.slide_width)
+    slide_h = int(prs.slide_height)
+
+    if slide_index < 0 or slide_index >= len(prs.slides):
+        raise ValueError(f"Slide index {slide_index} out of range")
+
+    slide = prs.slides[slide_index]
+
+    # Standard high-res 16:9 canvas
+    img_w, img_h = 1600, 900
+
+    bg_color = "#FFFFFF"
+    try:
+        bg = slide.background
+        fill = bg.fill
+        if fill.type is not None:
+            fg = fill.fore_color
+            rgb = fg.rgb
+            if rgb:
+                bg_color = "#{:02X}{:02X}{:02X}".format(rgb[0], rgb[1], rgb[2])
+    except Exception:
+        pass
+
+    img = Image.new("RGBA", (img_w, img_h), bg_color)
+    draw = ImageDraw.Draw(img)
+
+    # Draw shapes with fills
+    for shape in slide.shapes:
+        try:
+            # Check coordinates
+            left = shape.left
+            top = shape.top
+            width = shape.width
+            height = shape.height
+
+            # Percentages
+            x_pct = left / slide_w if slide_w else 0
+            y_pct = top / slide_h if slide_h else 0
+            w_pct = width / slide_w if slide_w else 0
+            h_pct = height / slide_h if slide_h else 0
+
+            # Pixels
+            x1 = x_pct * img_w
+            y1 = y_pct * img_h
+            x2 = (x_pct + w_pct) * img_w
+            y2 = (y_pct + h_pct) * img_h
+
+            fill_color = None
+            try:
+                fill = shape.fill
+                if fill.type is not None:
+                    fg = fill.fore_color
+                    rgb = fg.rgb
+                    if rgb:
+                        fill_color = "#{:02X}{:02X}{:02X}".format(rgb[0], rgb[1], rgb[2])
+            except Exception:
+                pass
+
+            if fill_color:
+                draw.rectangle([x1, y1, x2, y2], fill=fill_color)
+        except Exception:
+            pass
+
+    # Ensure output directory exists and save
+    import os
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    img.save(output_path, "PNG")
+

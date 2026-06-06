@@ -25,7 +25,7 @@ from db.queries import (
     mark_xlsx_parsed,
 )
 from parsers.pptx_parser import parse_pptx_file
-from parsers.slide_renderer import render_slide_to_html
+from parsers.slide_renderer import export_slide_to_png
 from parsers.xlsx_parser import parse_workbook
 import openpyxl
 
@@ -50,43 +50,89 @@ async def upload_pptx(file: UploadFile = File(...)):
         b64_content = base64.b64encode(raw_bytes).decode("utf-8")
 
         parsed = parse_pptx_file(b64_content)
+        sha = parsed["sha256"]
+
+        processed_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "processed"))
+        os.makedirs(processed_dir, exist_ok=True)
+        storage_path = os.path.join(processed_dir, f"{sha}.pptx")
+        with open(storage_path, "wb") as f:
+            f.write(raw_bytes)
 
         fid = insert_pptx_file(
             original_name=file.filename,
-            storage_path="",
+            storage_path=storage_path,
             slide_count=parsed["slide_count"],
             slide_width_emu=parsed["slide_width_emu"],
             slide_height_emu=parsed["slide_height_emu"],
-            sha256=parsed["sha256"],
+            sha256=sha,
         )
 
-        tmp_dir = tempfile.gettempdir()
-        tmp_path = os.path.join(tmp_dir, f"{fid}.pptx")
-        with open(tmp_path, "wb") as f:
-            f.write(raw_bytes)
+        slides_response = []
         for slide_index in range(len(parsed["slides"])):
             s = parsed["slides"][slide_index]
-            slide_html = render_slide_to_html(raw_bytes, slide_index)
+            
+            # Temporary slide index ID is generated during insert_slide
+            # But wait, insert_slide returns a slide ID
             sid = insert_slide(
                 pptx_file_id=fid,
                 slide_index=s["slide_index"],
                 slide_number=s["slide_number"],
                 title=s["title"],
+                png_path="",  # We will update it or insert with it!
                 shape_count=s["shape_count"],
                 has_table=s["has_table"],
                 has_chart=s["has_chart"],
-                rendered_html=slide_html,
             )
+
+            # Export slide PNG to processed/slides/{sid}.png
+            slides_dir = os.path.join(processed_dir, "slides")
+            os.makedirs(slides_dir, exist_ok=True)
+            png_path = os.path.join(slides_dir, f"{sid}.png")
+            export_slide_to_png(raw_bytes, slide_index, png_path)
+
+            # Update the png_path inside slides table for this slide
+            from db.connection import get_db
+            with get_db() as db:
+                db.execute("UPDATE slides SET png_path=? WHERE id=?", (png_path, sid))
+
+            db_shapes = []
             if s["shapes"]:
                 bulk_shapes = []
                 for sh in s["shapes"]:
                     sh["slide_id"] = sid
                     bulk_shapes.append(sh)
-                insert_shapes_bulk(bulk_shapes)
+                shape_ids = insert_shapes_bulk(bulk_shapes)
+                
+                for sh, shid in zip(s["shapes"], shape_ids):
+                    db_shapes.append({
+                        "id": shid,
+                        "pptx_shape_id": sh["pptx_shape_id"],
+                        "shape_name": sh["shape_name"],
+                        "shape_type": sh["shape_type"],
+                        "x_pct": sh["x_pct"],
+                        "y_pct": sh["y_pct"],
+                        "w_pct": sh["w_pct"],
+                        "h_pct": sh["h_pct"],
+                        "full_text": sh["full_text"],
+                        "runs_json": json.loads(sh["runs_json"]),
+                        "z_order": sh["z_order"]
+                    })
+
+            slides_response.append({
+                "slide_id": sid,
+                "slide_index": s["slide_index"],
+                "png_url": f"/api/slides/{sid}/png",
+                "shapes": db_shapes
+            })
 
         mark_pptx_parsed(fid)
 
-        return {"file_id": fid, "filename": file.filename}
+        return {
+            "pptx_file_id": fid,
+            "file_id": fid,
+            "filename": file.filename,
+            "slides": slides_response
+        }
 
     except Exception as e:
         log.error("PPTX error: %s", e)
